@@ -1,0 +1,27 @@
+{ "name" : "lite2",
+  "webserver_port" : 80, "jsonserver_port" : 4433,
+  "webserver_secure" : 443,
+
+  "run_ftp" : true, "ftp_user" : "me",
+
+  "run_acme" : true,
+  "acme_email_address" : "me@myself.us",
+  "acme_account_key_fn" : "acme/staging/account.pem",
+  "acme_account_file_name" : "acme/staging/account.json",
+  "acme_order_file_name" : "acme/staging/order.json",
+  "acme_cert_key_fn" : "acme/staging/certkey.pem",
+  "acme_cert_fn" : "acme/staging/certificate.pem",
+  "acme_server_url" : "https://acme-staging-v02.api.letsencrypt.org/directory", 
+  "acme_url" : "lite2.myself.us",
+
+  "acme_alt_url" : [ "test.myself.us" ],
+
+  "run_dyndns" : true,
+  "dyndns_url" : "lite2.myself.dns-cloud.net",
+  "dyndns_auth" : "abcdef",
+  "dyndns_provider" : "cloudns.net",
+
+  "includes" : [
+    "whitelist.json"
+  ]
+}
