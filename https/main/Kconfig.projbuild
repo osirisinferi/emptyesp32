@@ -1,0 +1,58 @@
+menu "ESP-Alarm Configuration"
+
+config OTA_URL
+  string "Secure boot file URL"
+
+config CONFIG_FN
+  string "configuration file name"
+  default "config.json"
+
+config DEFAULT_TIMEZONE
+  string "Default timezone string"
+  default "CET-1CEST,M3.5.0/2,M10.5.0/3"
+
+config BASE_PATH
+  string "Base path for internal file system"
+  default "/fs"
+
+config BRIGHTNESS_LOW
+  int "Low brightness value"
+  default 10
+
+config BRIGHTNESS_HIGH
+  int "High brightness value"
+  default 70
+
+config OLED_DC_PIN
+  int "The OLED DC pin"
+  default 16
+
+config OLED_CS_PIN
+  int "OLED CS pin"
+  default 17
+
+config ACME_FULLCHAIN_CERT_FN
+  string "File name for ACME full chain certificate"
+  default "fullchain.pem"
+
+config ACME_ACCOUNT_KEY_FN
+  string "File name for ACME account key"
+  default "account.pem"
+
+config ACME_CERT_KEY_FN
+  string "File name for ACME certificate key"
+  default "certkey.pem"
+
+config ACME_CERTIFICATE_FN
+  string "File name for ACME certificate"
+  default "certificate.pem"
+
+config ACME_ORDER_FN
+  string "File name for ACME order state file (JSON)"
+  default "order.json"
+
+config ACME_ACCOUNT_FN
+  string "File name for ACME account state file (JSON)"
+  default "account.json"
+
+endmenu
