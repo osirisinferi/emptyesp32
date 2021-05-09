@@ -50,6 +50,7 @@
 #ifdef	USE_HTTP_SERVER
 #include <WebServer.h>
 #endif
+#include <JsonServer.h>
 
 #include <esp_log.h>
 #include <apps/sntp/sntp.h>

@@ -38,6 +38,8 @@ Secure			*security = 0;
 #ifdef USE_HTTP_SERVER
 WebServer		*ws = 0, *uws = 0;
 #endif
+JsonServer		*jsonsrv = 0;
+
 
 esp_err_t app_connect(void *a, system_event_t *ep);
 esp_err_t app_disconnect(void *a, system_event_t *ep);
@@ -268,6 +270,8 @@ void App::setup(void) {
   if (config->getWebServerPort() != -1) {
     ws = new WebServer();
   }
+  jsonsrv = new JsonServer();
+
   ESP_LOGI(app_tag, "Starting OTA, web server port %d", config->getWebServerPort());
   ota = new Ota(false);
 #else
