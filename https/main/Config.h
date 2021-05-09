@@ -131,6 +131,7 @@ public:
   bool runAcme();
   const char *acmeEmailAddress();
   const char *acmeUrl();
+  const char **acmeAltUrl();
   const char *acmeServerUrl();
   const char *acmeAccountKeyFilename();
   const char *acmeCertKeyFilename();
@@ -232,7 +233,8 @@ private:
   char *acme_account_key_fn;	// file on SPIFFS where we store the ACME user's private key
   char *acme_cert_key_fn;	// file on SPIFFS where we store the ACME certificate's private key
   char *acme_email_address;	//
-  char *acme_url;
+  char *acme_url,		// Primary URL for which we manage a certificate
+	**acme_alt_url;		// Optional secondary URL(s) in the certificate
   char *acme_server_url;
   char *acme_account_fn,
 	     *acme_order_fn,

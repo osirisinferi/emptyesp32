@@ -59,6 +59,7 @@ Config::Config(String mac) {
   acme_cert_fn = (char *) CONFIG_ACME_CERTIFICATE_FN;
   run_acme = false;
   acme_url = 0;
+  acme_alt_url = 0;
   acme_server_url = (char *)ACME_DEFAULT_SERVER_URL;
   acme_order_fn = (char *)  CONFIG_ACME_ORDER_FN;
   acme_email_address = (char *)ACME_DEFAULT_EMAIL_ADDRESS;
@@ -120,6 +121,7 @@ Config::Config(char *mac) {
   acme_cert_fn = (char *) CONFIG_ACME_CERTIFICATE_FN;
   run_acme = false;
   acme_url = 0;
+  acme_alt_url = 0;
   acme_server_url = (char *)ACME_DEFAULT_SERVER_URL;
   acme_order_fn = (char *)  CONFIG_ACME_ORDER_FN;
   acme_email_address = (char *)ACME_DEFAULT_EMAIL_ADDRESS;
@@ -396,12 +398,27 @@ void Config::ParseConfig(JsonObject &jo) {
     }
   }
 
+  /*
+   * And for include files
+   */
   for (int i=0; i<8; i++) {
     const char *incl = jo["includes"][i];
     if (incl == 0)
       break;
     includes[i] = strdup(incl);
     ESP_LOGD(config_tag, "includes[%d] : \"%s\"", i, includes[i]);
+  }
+
+  // And for ACME alternative URLs
+  if (jo.containsKey("acme_alt_url")) {
+    acme_alt_url = (char **)calloc(8, sizeof(char *));
+    for (int i=0; i<8; i++) {
+      const char *u = jo["acme_alt_url"][i];
+      if (u == 0)
+        break;
+      acme_alt_url[i] = strdup(u);
+      ESP_LOGE(config_tag, "ACME alt url[%d] : \"%s\"", i, acme_alt_url[i]);
+    }
   }
 }
 
@@ -576,6 +593,12 @@ char *Config::QueryConfig() {
   json["acme_account_file_name"] = acme_account_fn;
   json["acme_order_file_name"] = acme_order_fn;
   json["acme_cert_fn"] = acme_cert_fn;
+
+  if (acme_alt_url) {
+    JsonArray &ja = json.createNestedArray("acme_alt_url");
+    for (int i=0; acme_alt_url[i]; i++)
+      ja.add(acme_alt_url[i]);
+  }
 
   json["use_spiffs"] = use_spiffs;
   json["use_littlefs"] = use_littlefs;
@@ -811,6 +834,10 @@ const char *Config::acmeEmailAddress() {
 
 const char *Config::acmeUrl() {
   return acme_url;
+}
+
+const char **Config::acmeAltUrl() {
+  return (const char **)acme_alt_url;
 }
 
 const char *Config::acmeServerUrl() {
