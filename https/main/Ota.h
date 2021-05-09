@@ -49,7 +49,7 @@ class Ota {
     friend esp_err_t OtaNetworkDisconnected(void *ctx, system_event_t *event);
     friend void OtaWsStarted(httpd_handle_t, httpd_handle_t);
 
-    friend esp_err_t index_handler(httpd_req_t *req);
+    friend esp_err_t ota_index_handler(httpd_req_t *req);
     friend esp_err_t serverIndex_handler(httpd_req_t *req);
     void SendPage(httpd_req_t *req);
 

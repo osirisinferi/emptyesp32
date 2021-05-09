@@ -38,7 +38,7 @@ esp_err_t OtaNetworkDisconnected(void *ctx, system_event_t *event);
 void OtaWsStarted(httpd_handle_t, httpd_handle_t);
 
 // Forward definitions of static functions
-esp_err_t index_handler(httpd_req_t *req);
+esp_err_t ota_index_handler(httpd_req_t *req);
 esp_err_t serverIndex_handler(httpd_req_t *req);
 
 const static char *ota_tag = "Ota";
@@ -60,20 +60,31 @@ Ota::Ota(bool start) {
   network->RegisterModule(ota_tag, OtaNetworkConnected, OtaNetworkDisconnected, 0, OtaWsStarted);
 }
 
+static const char *http_method2string(int m) {
+  switch (m) {
+  case HTTP_GET: return "HTTP_GET";
+  case HTTP_PUT: return "HTTP_PUT";
+  case HTTP_POST: return "HTTP_POST";
+  default: return "?";
+  }
+}
+
 void Ota::Start() {
   httpd_uri_t uri_hdl_def = { "/update", HTTP_POST, ota_update_handler, 0};
-  httpd_register_uri_handler(server, &uri_hdl_def);
+  if (httpd_register_uri_handler(server, &uri_hdl_def) != ESP_OK)
+    ESP_LOGE(ota_tag, "%s: failed to register %s %s handler", __FUNCTION__, uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
 
   // Handle the default query, this is "/", not "/index.html".
   uri_hdl_def.uri = "/";
   uri_hdl_def.method = HTTP_GET;
-  uri_hdl_def.handler = index_handler;
-  httpd_register_uri_handler(server, &uri_hdl_def);
+  uri_hdl_def.handler = ota_index_handler;
+  if (httpd_register_uri_handler(server, &uri_hdl_def) != ESP_OK)
+    ESP_LOGE(ota_tag, "%s: failed to register %s %s handler", __FUNCTION__, uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
 
   uri_hdl_def.uri = "/serverIndex";
   uri_hdl_def.handler = serverIndex_handler;
-  httpd_register_uri_handler(server, &uri_hdl_def);
-
+  if (httpd_register_uri_handler(server, &uri_hdl_def) != ESP_OK)
+    ESP_LOGE(ota_tag, "%s: failed to register %s %s handler", __FUNCTION__, uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
 }
 
 Ota::~Ota() {
@@ -555,7 +566,7 @@ void Ota::SendPage(httpd_req_t *req) {
 /*
  * This gets the standard initial request, just http://this-node
  */
-esp_err_t index_handler(httpd_req_t *req) {
+esp_err_t ota_index_handler(httpd_req_t *req) {
   // Check whether this socket is secure.
   int sock = httpd_req_to_sockfd(req);
 

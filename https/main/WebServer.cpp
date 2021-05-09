@@ -64,38 +64,14 @@ WebServer::WebServer() {
   usrv = ssrv = 0;
 }
 
-#undef	USE_RCV_BUF
-#ifdef	USE_RCV_BUF
-/**
- * @brief  Function prototype for opening a session.
- *
- * Called immediately after the socket was opened to set up the send/recv functions and
- * other parameters of the socket.
- *
- * @param[in] hd       server instance
- * @param[in] sockfd   session socket file descriptor
- * @return
- *  - ESP_OK   : On success
- *  - Any value other than ESP_OK will signal the server to close the socket immediately
- *
- * typedef esp_err_t (*httpd_open_func_t)(httpd_handle_t hd, int sockfd);
- */
-static esp_err_t open_fn(httpd_handle_t hd, int sockfd) {
-  /*
-   * Try to enhance receive buffer size
-   */
-  int bsize = 8192;
-  socklen_t optlen = sizeof(bsize);
-  esp_err_t err;
-  if ((err = setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, &bsize, optlen)) == ESP_OK) {
-    ESP_LOGI(swebserver_tag, "%s: rcvbuf set to %d", __FUNCTION__, bsize);
-  } else {
-    ESP_LOGE(swebserver_tag, "%s: failed to set rcvbuf size, error %d %s",
-      __FUNCTION__, err, esp_err_to_name(err));
+static const char *http_method2string(int m) {
+  switch (m) {
+  case HTTP_GET: return "HTTP_GET";
+  case HTTP_PUT: return "HTTP_PUT";
+  case HTTP_POST: return "HTTP_POST";
+  default: return "?";
   }
-  return ESP_OK;
 }
-#endif
 
 void WebServer::Start() {
   esp_err_t		err = ESP_FAIL;
@@ -180,9 +156,6 @@ void WebServer::Start() {
   httpd_config_t	cfg = HTTPD_DEFAULT_CONFIG();
   cfg.server_port = config->getWebServerPort();
   cfg.ctrl_port = 32769;	// HACK, original one (ssl server) is on 32768
-#ifdef	USE_RCV_BUF
-  cfg.open_fn = open_fn;
-#endif
 
   if ((err = httpd_start(&usrv, &cfg)) != ESP_OK) {
     ESP_LOGE(webserver_tag, "failed to start %s (%d)", esp_err_to_name(err), err);
@@ -198,7 +171,8 @@ void WebServer::Start() {
     index_handler,		// Handler
     (void *)0			// User context
   };
-  httpd_register_uri_handler(usrv, &uri_hdl_def);
+  if (httpd_register_uri_handler(usrv, &uri_hdl_def) != ESP_OK)
+    ESP_LOGE(webserver_tag, "%s: failed to register %s %s handler", __FUNCTION__, uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
 #endif
 
 #ifndef	USE_HTTPS_SERVER
@@ -213,7 +187,8 @@ void WebServer::Start() {
 #if 0
   uri_hdl_def.uri = "/*";
   uri_hdl_def.handler = wildcard_handler;
-  httpd_register_uri_handler(usrv, &uri_hdl_def);
+  if (httpd_register_uri_handler(usrv, &uri_hdl_def) != ESP_OK)
+    ESP_LOGE(webserver_tag, "%s: failed to register %s %s handler", __FUNCTION__, uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
 #endif
 
   // Handler for arming from a browser
@@ -222,7 +197,8 @@ void WebServer::Start() {
   uri_hdl_def.method = HTTP_GET;
   uri_hdl_def.user_ctx = 0;
   uri_hdl_def.handler = alarm_handler;
-  httpd_register_uri_handler(ssrv, &uri_hdl_def);
+  if (httpd_register_uri_handler(ssrv, &uri_hdl_def) != ESP_OK)
+    ESP_LOGE(webserver_tag, "%s: failed to register %s %s handler", __FUNCTION__, uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
 
   network->WebServerStarted(usrv, ssrv);
 }
