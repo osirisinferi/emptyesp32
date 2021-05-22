@@ -963,6 +963,14 @@ esp_err_t esp_http_client_perform(esp_http_client_handle_t client)
     return ESP_OK;
 }
 
+// Helper function for bugfix in esp_http_client_fetch_headers
+int _header_end(const char *ptr, const int len) {
+  for (int i=0; i<len-3; i++)
+    if (ptr[i] == 0x0D && ptr[i+1] == 0x0A && ptr[i+2] == 0x0D && ptr[i+3] == 0x0A)
+      return i+3;
+  return -1;
+}
+
 int esp_http_client_fetch_headers(esp_http_client_handle_t client)
 {
     if (client->state < HTTP_STATE_REQ_COMPLETE_HEADER) {
@@ -973,6 +981,8 @@ int esp_http_client_fetch_headers(esp_http_client_handle_t client)
     esp_http_buffer_t *buffer = client->response->buffer;
     client->response->status_code = -1;
 
+#if 0
+    // Original code calls http_parser_execute with a buffer that may end on an incompletely read line
     while (client->state < HTTP_STATE_RES_COMPLETE_HEADER) {
         buffer->len = esp_transport_read(client->transport, buffer->data, client->buffer_size, client->timeout_ms);
         if (buffer->len <= 0) {
@@ -980,6 +990,26 @@ int esp_http_client_fetch_headers(esp_http_client_handle_t client)
         }
         http_parser_execute(client->parser, client->parser_settings, buffer->data, buffer->len);
     }
+#else
+    // Original code calls http_parser_execute with a buffer that may end on an incompletely read line
+    // In this version, detect incomplete header, allocate more memory, only call http_parser when that's ok.
+    int off = 0;
+    buffer->len = esp_transport_read(client->transport, buffer->data, client->buffer_size, client->timeout_ms);
+    int eoh;
+
+    while ((eoh = _header_end(buffer->data, buffer->len)) < 0) {
+	off = buffer->len;
+	buffer->data = realloc(buffer->data, buffer->len + 200);
+
+	int r = esp_transport_read(client->transport, buffer->data+off, 200, client->timeout_ms);
+        if (r < 0) {
+            return ESP_FAIL;
+        }
+	buffer->len += r;
+    }
+
+    http_parser_execute(client->parser, client->parser_settings, buffer->data, buffer->len);
+#endif
     ESP_LOGD(TAG, "content_length = %d", client->response->content_length);
     if (client->response->content_length <= 0) {
         client->response->is_chunked = true;
