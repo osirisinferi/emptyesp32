@@ -32,7 +32,8 @@ Ota			*ota = 0;
 Network			*network = 0;
 #ifdef USE_ACME
 Acme			*acme = 0;
-Dyndns			*dyndns = 0;
+Dyndns			*dyndns = 0,
+			*dyndns2 = 0;
 #endif
 Secure			*security = 0;
 #ifdef USE_HTTP_SERVER
@@ -70,6 +71,7 @@ void App::setup(void) {
   esp_log_level_set("intr_alloc", ESP_LOG_ERROR);
   esp_log_level_set("efuse", ESP_LOG_ERROR);
   esp_log_level_set("httpd_parse", ESP_LOG_DEBUG);
+  esp_log_level_set("esp_http_client", ESP_LOG_DEBUG);
 
   ESP_LOGI(app_tag, "https server tester (c) 2017, 2018, 2019, 2020, 2021 by Danny Backx");
 
@@ -191,12 +193,18 @@ void App::setup(void) {
   if (config->runAcme()) {
     acme = new Acme();
     acme->setFilenamePrefix(config->getFilePrefix());
+    // acme->ProcessStepByStep(true);
   }
 
   // Do ACME if we have a secure server, and we require it
   if ((config->getJSONServerPort() > 0) && config->runAcme()) {
 
     acme->setUrl(config->acmeUrl());
+    const char **alt = NULL;
+    alt = config->acmeAltUrl();
+    if (alt)
+      for (int i=0; alt[i]; i++)
+        acme->setAltUrl(i, alt[i]);
     acme->setAcmeServer(config->acmeServerUrl());
     acme->setEmail(config->acmeEmailAddress());
 
@@ -207,6 +215,9 @@ void App::setup(void) {
     acme->setCertificateFilename(config->acmeCertificateFilename());
 
     ESP_LOGI("Acme", "URL %s", config->acmeUrl());
+    if (alt)
+      for (int i=0; alt[i]; i++)
+        ESP_LOGE("Acme", "Alt URL %s", alt[i]);
     ESP_LOGI("Acme", "Server %s", config->acmeServerUrl());
     ESP_LOGI("Acme", "Email %s", config->acmeEmailAddress());
 
@@ -215,6 +226,14 @@ void App::setup(void) {
     ESP_LOGI("Acme", "Account key fn %s", config->acmeAccountKeyFilename());
     ESP_LOGI("Acme", "Certificate key fn %s", config->acmeCertKeyFilename());
     ESP_LOGI("Acme", "Certificate fn %s", config->acmeCertificateFilename());
+
+#if 0
+    /* *** TEST *** */
+    ESP_LOGE(app_tag, "NewOrder+alt test");
+    const char *urls[2] = { "lite2.dannybackx.cloudns.net", 0 };
+    acme->RequestNewOrder("lite2.dannybackx.dns-cloud.net", urls);
+    /* *** TEST *** */
+#endif
 
     if (! acme->HaveValidCertificate()) {
       /*
@@ -242,15 +261,26 @@ void App::setup(void) {
       dyndns = new Dyndns(DD_NOIP);
     }
 
-      if (config->dyndns_url() == 0 || config->dyndns_auth() == 0) {
-        // We need both the URL to keep alive, and authentication data.
-        ESP_LOGE(app_tag, "Can't run DynDNS - insufficient configuration");
-      } else {
-        dyndns->setHostname(config->dyndns_url());
-        ESP_LOGI(app_tag, "Running DynDNS for domain %s", config->dyndns_url());
-        dyndns->setAuth(config->dyndns_auth());
-        ESP_LOGD(app_tag, "DynDNS auth %s", config->dyndns_auth());
-      }
+    if (config->dyndns_url() == 0 || config->dyndns_auth() == 0) {
+      // We need both the URL to keep alive, and authentication data.
+      ESP_LOGE(app_tag, "Can't run DynDNS - insufficient configuration");
+    } else {
+      dyndns->setHostname(config->dyndns_url());
+      ESP_LOGI(app_tag, "Running DynDNS for domain %s", config->dyndns_url());
+      dyndns->setAuth(config->dyndns_auth());
+      ESP_LOGD(app_tag, "DynDNS auth %s", config->dyndns_auth());
+    }
+
+    // Test 2nd name
+// #if defined(DYNDNS2_URL) && defined(DYNDNS2_AUTH) && 0
+#if defined(DYNDNS2_URL) && defined(DYNDNS2_AUTH)
+      dyndns2 = new Dyndns(DD_CLOUDNS);
+      dyndns2->setHostname(DYNDNS2_URL);
+      dyndns2->setAuth(DYNDNS2_AUTH);
+#else
+      ESP_LOGE(app_tag, "No second DynDNS host");
+      #warning "No DynDNS2"
+#endif
   }
 #elif defined(USE_ACME_CONFIG)	// print out the ACME configuration nevertheless
   ESP_LOGI(app_tag, "FS prefix %s", config->getFilePrefix());
@@ -361,12 +391,30 @@ void App::loop() {
   if (network->isConnected()) {
     // Weekly DynDNS update (1w = 86400s)
     if (dyndns && (nowts > 1000000L)) {
-      if ((dyndns_last == 0) || (((nowts - dyndns_last) / 1000000) > 86)) {
+      if ((dyndns_timeout == 0) || (nowts > dyndns_timeout)) {
 	if (dyndns->update()) {
 	  ESP_LOGI(app_tag, "DynDNS update succeeded");
-	  dyndns_last = nowts;
-	} else
+	  // On success, repeat after a week
+	  dyndns_timeout = nowts + 86400;
+	} else {
 	  ESP_LOGE(app_tag, "DynDNS update failed");
+	  // On failure, retry after a minute
+	  dyndns_timeout = nowts + 65;
+	}
+      }
+    }
+
+    if (dyndns2 && (nowts > 1000000L)) {
+      if ((dyndns2_timeout == 0) || (nowts > dyndns2_timeout)) {
+	if (dyndns2->update()) {
+	  ESP_LOGI(app_tag, "DynDNS-2 update succeeded");
+	  // On success, repeat after a week
+	  dyndns2_timeout = nowts + 86400;
+	} else {
+	  ESP_LOGE(app_tag, "DynDNS-2 update failed");
+	  // On failure, retry after a minute
+	  dyndns2_timeout = nowts + 65;
+	}
       }
     }
 
@@ -488,7 +536,8 @@ App::App() {
 
   nowts = 0;
   boot_time = 0;
-  dyndns_last = 0;
+  dyndns_timeout = 0;
+  dyndns2_timeout = 0;
 }
 
 App::~App() {

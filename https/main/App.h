@@ -75,7 +75,8 @@ private:
   uint8_t	smac[20];
   char		lmac[18];
 
-  time_t	dyndns_last = 0;
+  time_t	dyndns_timeout = 0,
+  		dyndns2_timeout = 0;
 };
 
 extern App	*app;
