@@ -417,7 +417,6 @@ void Config::ParseConfig(JsonObject &jo) {
       if (u == 0)
         break;
       acme_alt_url[i] = strdup(u);
-      ESP_LOGE(config_tag, "ACME alt url[%d] : \"%s\"", i, acme_alt_url[i]);
     }
   }
 }

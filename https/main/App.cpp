@@ -272,14 +272,12 @@ void App::setup(void) {
     }
 
     // Test 2nd name
-// #if defined(DYNDNS2_URL) && defined(DYNDNS2_AUTH) && 0
 #if defined(DYNDNS2_URL) && defined(DYNDNS2_AUTH)
       dyndns2 = new Dyndns(DD_CLOUDNS);
       dyndns2->setHostname(DYNDNS2_URL);
       dyndns2->setAuth(DYNDNS2_AUTH);
 #else
       ESP_LOGE(app_tag, "No second DynDNS host");
-      #warning "No DynDNS2"
 #endif
   }
 #elif defined(USE_ACME_CONFIG)	// print out the ACME configuration nevertheless
