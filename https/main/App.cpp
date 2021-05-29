@@ -217,7 +217,7 @@ void App::setup(void) {
     ESP_LOGI("Acme", "URL %s", config->acmeUrl());
     if (alt)
       for (int i=0; alt[i]; i++)
-        ESP_LOGE("Acme", "Alt URL %s", alt[i]);
+        ESP_LOGI("Acme", "Alt URL %s", alt[i]);
     ESP_LOGI("Acme", "Server %s", config->acmeServerUrl());
     ESP_LOGI("Acme", "Email %s", config->acmeEmailAddress());
 
