@@ -41,13 +41,6 @@ WebServer		*ws = 0, *uws = 0;
 #endif
 JsonServer		*jsonsrv = 0;
 
-
-esp_err_t app_connect(void *a, system_event_t *ep);
-esp_err_t app_disconnect(void *a, system_event_t *ep);
-void delayed_start(struct timeval *tvp);
-
-static const char *app_tag = "App (static)";
-
 App *app;
 
 // Initial function
@@ -310,35 +303,21 @@ void App::setup(void) {
 }
 
 /*
- * Keep track of average loop duration.
- *	avg = sum / (count - 1)
- * in milli-seconds
- */
-struct timeval otv;
-int loop_count = 0;
-const int count_max = 100000;
-long	sum;
-static time_t last_try = 0;
-static bool boot_report_ok = false;
-static char *boot_msg = 0;
-static bool ftp_started = false;
-
-/*
  * This gets called when we have SNTP based time
  */
-void delayed_start(struct timeval *tvp)
+void App::delayed_start(struct timeval *tvp)
 {
-  if (boot_report_ok)
+  if (app->boot_report_ok)
     return;
 
   app->boot_time = tvp->tv_sec;
 
   char ts[24];
-  if (boot_msg == 0) {
-    boot_msg = (char *)malloc(80);
+  if (app->boot_msg == 0) {
+    app->boot_msg = (char *)malloc(80);
     struct tm *tmp = localtime(&app->boot_time);
     strftime(ts, sizeof(ts), "%Y-%m-%d %T", tmp);
-    sprintf(boot_msg, "Alarm controller %s boot at %s", config->myName(), ts);
+    sprintf(app->boot_msg, "Alarm controller %s boot at %s", config->myName(), ts);
   }
 }
 
@@ -498,20 +477,20 @@ extern "C" {
 }
 #endif
 
-esp_err_t app_connect(void *a, system_event_t *ep) {
+esp_err_t App::app_connect(void *a, system_event_t *ep) {
   if (config->runFtp()) {
-    if (! ftp_started) {
+    if (! app->ftp_started) {
       ftp_init();
-      ESP_LOGI(app_tag, "FTP started");
+      ESP_LOGI(app->app_tag, "FTP started");
 
-      ftp_started = true;
+      app->ftp_started = true;
     }
   }
   return ESP_OK;
 }
 
-esp_err_t app_disconnect(void *a, system_event_t *ep) {
-  ftp_started = false;
+esp_err_t App::app_disconnect(void *a, system_event_t *ep) {
+  app->ftp_started = false;
   ftp_stop();
   return ESP_OK;
 }
@@ -536,6 +515,12 @@ App::App() {
   boot_time = 0;
   dyndns_timeout = 0;
   dyndns2_timeout = 0;
+
+  ftp_started = false;
+  loop_count = 0;
+  last_try = 0;
+  boot_report_ok = false;
+  boot_msg = 0;
 }
 
 App::~App() {

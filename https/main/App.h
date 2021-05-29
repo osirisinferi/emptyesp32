@@ -77,6 +77,19 @@ private:
 
   time_t	dyndns_timeout = 0,
   		dyndns2_timeout = 0;
+
+  bool		ftp_started;
+  struct timeval otv;
+  int		loop_count;
+  const int	count_max = 100000;
+  long		sum;
+  time_t	last_try;
+  bool		boot_report_ok;
+  char		*boot_msg;
+
+  static esp_err_t app_connect(void *a, system_event_t *ep);
+  static esp_err_t app_disconnect(void *a, system_event_t *ep);
+  static void delayed_start(struct timeval *tvp);
 };
 
 extern App	*app;
