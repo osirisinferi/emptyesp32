@@ -46,13 +46,13 @@ class WebServer {
 
     void SendPage(httpd_req_t *);
 
-    friend esp_err_t index_handler(httpd_req_t *req);
-    friend esp_err_t alarm_handler(httpd_req_t *req);
-    friend esp_err_t wildcard_handler(httpd_req_t *req);
+    static esp_err_t index_handler(httpd_req_t *req);
+    static esp_err_t alarm_handler(httpd_req_t *req);
+    static esp_err_t wildcard_handler(httpd_req_t *req);
 
     // Hooks for Network
-    friend esp_err_t WsNetworkConnected(void *ctx, system_event_t *event);
-    friend esp_err_t WsNetworkDisonnected(void *ctx, system_event_t *event);
+    static esp_err_t WsNetworkConnected(void *ctx, system_event_t *event);
+    static esp_err_t WsNetworkDisconnected(void *ctx, system_event_t *event);
 
     //
     const unsigned char *ReadFile(const char *fn, int *plen);

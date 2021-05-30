@@ -49,15 +49,6 @@
 #include "Network.h"
 #include "Secure.h"
 
-// Forward definitions of static functions
-esp_err_t alarm_handler(httpd_req_t *req);
-// esp_err_t index_handler(httpd_req_t *req);
-esp_err_t wildcard_handler(httpd_req_t *req);
-esp_err_t WsNetworkConnected(void *ctx, system_event_t *event);
-esp_err_t WsNetworkDisconnected(void *ctx, system_event_t *event);
-
-const static char *swebserver_tag = "WebServer";
-
 WebServer::WebServer() {
   network->RegisterModule(webserver_tag, WsNetworkConnected, WsNetworkDisconnected);
 
@@ -218,7 +209,7 @@ WebServer::~WebServer() {
  * Generic handler
  * No conditional compilation here but only called if esp-idf version is right
  */
-esp_err_t wildcard_handler(httpd_req_t *req) {
+esp_err_t WebServer::wildcard_handler(httpd_req_t *req) {
   return ESP_OK;
 }
 
@@ -228,7 +219,7 @@ esp_err_t wildcard_handler(httpd_req_t *req) {
  * FIX ME
  * Security code required ;-)
  */
-esp_err_t alarm_handler(httpd_req_t *req) {
+esp_err_t WebServer::alarm_handler(httpd_req_t *req) {
   // Check whether this socket is secure.
   int sock = httpd_req_to_sockfd(req);
 
@@ -243,10 +234,10 @@ esp_err_t alarm_handler(httpd_req_t *req) {
   int	buflen;
   char	*buf;
 
-  ESP_LOGI(swebserver_tag, "%s - URI {%s}", __FUNCTION__, req->uri);
+  ESP_LOGI(ws->webserver_tag, "%s - URI {%s}", __FUNCTION__, req->uri);
   buflen = httpd_req_get_url_query_len(req);
 
-  ESP_LOGD(swebserver_tag, "%s - httpd_req_get_url_query_len() => %d", __FUNCTION__, buflen);
+  ESP_LOGD(ws->webserver_tag, "%s - httpd_req_get_url_query_len() => %d", __FUNCTION__, buflen);
 
   if (buflen == 0) {
     const char *reply = "Error: no parameters specified";
@@ -259,15 +250,15 @@ esp_err_t alarm_handler(httpd_req_t *req) {
   esp_err_t e;
 
   if ((e = httpd_req_get_url_query_str(req, buf, buflen + 1)) == ESP_OK) {
-    ESP_LOGD(swebserver_tag, "%s found query => %s", __FUNCTION__, buf);
+    ESP_LOGD(ws->webserver_tag, "%s found query => %s", __FUNCTION__, buf);
     char param[32];
 
     /* Get value of expected key from query string */
     if (httpd_query_key_value(buf, "armed", param, sizeof(param)) == ESP_OK) {
-      ESP_LOGD(swebserver_tag, "Found URL query parameter => armed = \"%s\"", param);
+      ESP_LOGD(ws->webserver_tag, "Found URL query parameter => armed = \"%s\"", param);
     }
   } else {
-    ESP_LOGE(swebserver_tag, "%s: could not get URL query, error %s %d",
+    ESP_LOGE(ws->webserver_tag, "%s: could not get URL query, error %s %d",
       __FUNCTION__, esp_err_to_name(e), e);
     free(buf);
     const char *reply = "Could not get url query";
@@ -287,7 +278,7 @@ esp_err_t alarm_handler(httpd_req_t *req) {
  * No status or error codes called.
  */
 void WebServer::SendPage(httpd_req_t *req) {
-  ESP_LOGD(swebserver_tag, "%s", __FUNCTION__);
+  ESP_LOGD(ws->webserver_tag, "%s", __FUNCTION__);
 
   // Reply
 #ifdef USE_WEATHER
@@ -398,10 +389,10 @@ esp_err_t index_handler(httpd_req_t *req) {
     if (getpeername(sock, (sockaddr *)&sa6, &salen) == 0) {
       struct sockaddr_in sa;
       sa.sin_addr.s_addr = sa6.sin6_addr.un.u32_addr[3];
-      ESP_LOGE(swebserver_tag, "%s: access attempt for %s from %s, not allowed",
+      ESP_LOGE(ws->webserver_tag, "%s: access attempt for %s from %s, not allowed",
         __FUNCTION__, req->uri, inet_ntoa(sa.sin_addr));
     } else {
-      ESP_LOGE(swebserver_tag, "%s: access attempt for %s, not allowed", __FUNCTION__, req->uri);
+      ESP_LOGE(ws->webserver_tag, "%s: access attempt for %s, not allowed", __FUNCTION__, req->uri);
     }
 
     httpd_resp_set_status(req, "401 Not authorized");
@@ -424,8 +415,8 @@ httpd_handle_t WebServer::getSSLServer() {
   return ssrv;
 }
 
-esp_err_t WsNetworkConnected(void *ctx, system_event_t *event) {
-  ESP_LOGD(swebserver_tag, "Starting WebServer");
+esp_err_t WebServer::WsNetworkConnected(void *ctx, system_event_t *event) {
+  ESP_LOGD(ws->webserver_tag, "Starting WebServer");
 
   ws->Start();
 #ifdef USE_ACME
@@ -434,7 +425,7 @@ esp_err_t WsNetworkConnected(void *ctx, system_event_t *event) {
   return ESP_OK;
 }
 
-esp_err_t WsNetworkDisconnected(void *ctx, system_event_t *event) {
+esp_err_t WebServer::WsNetworkDisconnected(void *ctx, system_event_t *event) {
   if (ws->getRegularServer())
     httpd_stop(ws->getRegularServer());
   if (ws->getSSLServer())
