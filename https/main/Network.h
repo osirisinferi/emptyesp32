@@ -23,9 +23,11 @@
 #ifndef	_MY_NETWORK_H_
 #define	_MY_NETWORK_H_
 
-#include <esp_event_loop.h>
+#include <esp_event.h>
 #include <esp_http_server.h>
 #include <esp_log.h>
+#include <esp_sntp.h>
+#include <esp_event_loop.h>
 
 #include <list>
 using namespace std;
@@ -148,6 +150,10 @@ private:
   list<module_registration>	modules;
   friend esp_err_t wifi_event_handler(void *ctx, system_event_t *event);
   friend void sntp_sync_notify(struct timeval *);
+
+  friend void event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void* event_data);
+  friend void ip_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void* event_data);
+  friend void discon_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void* event_data);
 };
 
 // Global variables

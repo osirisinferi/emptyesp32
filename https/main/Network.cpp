@@ -29,7 +29,6 @@
 #include "Network.h"
 
 #include <esp_wifi.h>
-#include <esp_event_loop.h>
 #include "mqtt_client.h"
 #include <freertos/task.h>
 #include <sys/socket.h>
@@ -167,8 +166,16 @@ static const char *WifiReason2String(int r) {
   }
 }
 
+/*
+ * The ESP-IDF APIs have changed quite a bit between v3.x and v4 :-( so we have two versions
+ * of some functions here. The event handler also has different parameters.
+ */
+#if (ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 0, 0))
+/*
+ * Old style : catch all events
+ */
 esp_err_t wifi_event_handler(void *ctx, system_event_t *event) {
-  ESP_LOGD(snetwork_tag, "wifi_event_handler(%d,%s)", event->event_id, EventId2String(event->event_id));
+  ESP_LOGE(snetwork_tag, "wifi_event_handler(%d,%s)", event->event_id, EventId2String(event->event_id));
 
   switch (event->event_id) {
     case SYSTEM_EVENT_STA_START:
@@ -176,16 +183,17 @@ esp_err_t wifi_event_handler(void *ctx, system_event_t *event) {
       break;
 
     case SYSTEM_EVENT_STA_CONNECTED:
+      ESP_LOGE(snetwork_tag, "STA_CONNECTED");
       tcpip_adapter_create_ip6_linklocal(TCPIP_ADAPTER_IF_STA);
       break;
 
     case SYSTEM_EVENT_GOT_IP6:
-      ESP_LOGI(snetwork_tag, "IPv6 : %s", ip6addr_ntoa(&event->event_info.got_ip6.ip6_info.ip));
+      ESP_LOGI(snetwork_tag, "IPv6 : %s", ip6addr_ntoa((const ip6_addr_t *)&event->event_info.got_ip6.ip6_info.ip));
       break;
 
     case SYSTEM_EVENT_STA_GOT_IP:
       ESP_LOGI(snetwork_tag, "Network connected, ip %s, SSID %s",
-        ip4addr_ntoa(&event->event_info.got_ip.ip_info.ip),
+        ip4addr_ntoa((const ip4_addr_t *)&event->event_info.got_ip.ip_info.ip),
         network->getSSID());
 
       network->setWifiOk(true);
@@ -227,6 +235,8 @@ esp_err_t wifi_event_handler(void *ctx, system_event_t *event) {
       break;
 
     case SYSTEM_EVENT_STA_DISCONNECTED:
+      ESP_LOGE(snetwork_tag, "STA_DISCONNECTED");
+
       if (network->getStatus() == NS_CONNECTING) {
         system_event_sta_disconnected_t *evp = &event->event_info.disconnected;
         /*
@@ -234,7 +244,7 @@ esp_err_t wifi_event_handler(void *ctx, system_event_t *event) {
 	 * If this means a network should be discarded, do so.
 	 * After that, start scanning again.
 	 */
-        ESP_LOGD(snetwork_tag, "Failed to connect to this SSID (reason %d %s)",
+        ESP_LOGE(snetwork_tag, "Failed to connect to this SSID (reason %d %s)",
 	  evp->reason, WifiReason2String(evp->reason));
 
 	network->setStatus(NS_FAILED);
@@ -283,13 +293,16 @@ esp_err_t wifi_event_handler(void *ctx, system_event_t *event) {
  * which we need to pass to Config.
  * After this, we can also await attachment to a network.
  */
-void Network::SetupWifi(void)
-{
+/*
+ * Legacy ESP-IDF v3.*
+ */
+void Network::SetupWifi(void) {
   esp_err_t err;
 
   mqtt_message = 0;
 
-  tcpip_adapter_init();
+  tcpip_adapter_init();		// Deprecated
+
   err = esp_event_loop_init(wifi_event_handler, NULL);
   if (err != ESP_OK) {
       /*
@@ -299,6 +312,8 @@ void Network::SetupWifi(void)
        *     if (s_event_init_flag) {
        *         return ESP_FAIL;
        *     }
+       * ..
+       * }
        *
        * So no action on this error.
        */
@@ -319,6 +334,132 @@ void Network::SetupWifi(void)
 
   status = NS_SETUP_DONE;
 }
+#else
+/*
+ * ESP-IDF v4.*
+ */
+void event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void *event_data) {
+  if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+    esp_wifi_connect();
+  }
+}
+
+void discon_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void *event_data) {
+  esp_wifi_connect();
+  ESP_LOGD(snetwork_tag, "retry to connect to the AP");
+
+  if (network->getStatus() == NS_CONNECTING) {
+    /*
+     * This is the asynchronous reply of a failed connection attempt.
+     * If this means a network should be discarded, do so.
+     * After that, start scanning again.
+     */
+    wifi_event_sta_disconnected_t *disc = (wifi_event_sta_disconnected_t *)event_data;
+
+    ESP_LOGE(snetwork_tag, "Failed to connect to SSID %.*s (reason %d %s)",
+      sizeof(disc->ssid), disc->ssid, disc->reason, WifiReason2String(disc->reason));
+    network->setStatus(NS_FAILED);
+
+    switch (disc->reason) {
+    case WIFI_REASON_NO_AP_FOUND:	// FIX ME probably more than just this case
+    case WIFI_REASON_AUTH_FAIL:
+      network->setReason(disc->reason);
+      network->DiscardCurrentNetwork();
+      break;
+    default:
+      break;
+    }
+
+    // Trigger next try
+    network->setStatus(NS_SETUP_DONE);
+    network->WaitForWifi();
+
+  } else {
+    /*
+     * We were connected but lost the network. So gracefully shut down open connections,
+     * and then try to reconnect to the network.
+     */
+    ESP_LOGI(snetwork_tag, "STA_DISCONNECTED, restarting");
+    network->setWifiOk(false);
+
+#ifdef USE_ACME
+    if (acme) acme->NetworkDisconnected(ctx, (system_event_t *)event_data);
+#endif
+    if (network) network->NetworkDisconnected(ctx, (system_event_t *)event_data);
+
+    network->StopWifi();			// This also schedules a restart
+  }
+}
+
+void ip_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void *event_data) {
+    ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
+
+    ESP_LOGI(snetwork_tag, "Network connected, ip " IPSTR " SSID %s",
+      IP2STR(&event->ip_info.ip), network->getSSID());
+
+    network->setWifiOk(true);
+
+    list<module_registration>::iterator mp;
+    ESP_LOGD(snetwork_tag, "Network Connected : %d modules", network->modules.size());
+
+    for (mp = network->modules.begin(); mp != network->modules.end(); mp++) {
+      if (mp->NetworkConnected != 0) {
+	ESP_LOGI(snetwork_tag, "Network Connected : call module %s", mp->module);
+
+	// FIX ME how to treat result
+	mp->result = mp->NetworkConnected(ctx, (system_event_t *)event_data);
+	ESP_LOGI(snetwork_tag, "Network Connected : return %d from module %s", mp->result, mp->module);
+      }
+    }
+
+    if (network) network->NetworkConnected(ctx, (system_event_t *)event_data);
+#ifdef USE_ACME
+    if (acme && network->NetworkHasMyAcmeBypass()) {
+      // Note only start running ACME if we're on a network configured for it
+      acme->NetworkConnected(ctx, (system_event_t *)event_data);
+
+      if (! acme->HaveValidCertificate()) {
+        ESP_LOGI(snetwork_tag, "Don't have a valid certificate ...");
+        acme->CreateNewAccount();
+        acme->CreateNewOrder();
+      }
+    }
+#endif
+}
+
+void Network::SetupWifi(void) {
+  esp_err_t err;
+
+  mqtt_message = 0;
+  ESP_LOGD(network_tag, "%s %d", __FUNCTION__, __LINE__);
+
+  esp_netif_init();
+  esp_event_loop_create_default();
+  esp_netif_create_default_wifi_sta();
+
+  esp_event_handler_instance_t inst_any_id, inst_got_ip, inst_discon;
+
+  esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL, &inst_any_id);
+  esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &discon_event_handler, NULL, &inst_discon);
+  esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &ip_event_handler, NULL, &inst_got_ip);
+
+  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+  err = esp_wifi_init(&cfg);
+  if (err != ESP_OK) {
+      ESP_LOGE(network_tag, "Failed esp_wifi_init, reason %d", (int)err);
+      // FIXME
+      return;
+  }
+  err = esp_wifi_set_storage(WIFI_STORAGE_RAM);
+  if (err != ESP_OK) {
+      ESP_LOGE(network_tag, "Failed esp_wifi_set_storage, reason %d", (int)err);
+      // FIXME
+      return;
+  }
+
+  status = NS_SETUP_DONE;
+}
+#endif
 
 void Network::WaitForWifi(void)
 {
@@ -362,6 +503,7 @@ void Network::WaitForWifi(void)
     }
 
     if (mywifi[ix].eap_password && strlen(mywifi[ix].eap_password) > 0) {
+#if (ESP_IDF_VERSION_MAJOR == 3)
       /*
        * Set the Wifi to STAtion mode on the network specified by SSID (and optionally BSSID).
        */
@@ -411,6 +553,7 @@ void Network::WaitForWifi(void)
         ESP_LOGE(network_tag, "Error %d enabling Wifi with WPA2, %s", err, esp_err_to_name(err));
 	continue;
       }
+#endif	/* WPA2 && ESP-IDF 3.x */
     } else {
       /*
        * Normal version : use WPA
@@ -573,7 +716,6 @@ void Network::NetworkConnected(void *ctx, system_event_t *event) {
 
   // Start SNTP client
   sntp_setoperatingmode(SNTP_OPMODE_POLL);
-  sntp_init();
 #ifdef  NTP_SERVER_0
   sntp_setservername(0, (char *)NTP_SERVER_0);
 #endif
@@ -582,6 +724,7 @@ void Network::NetworkConnected(void *ctx, system_event_t *event) {
 #endif
   sntp_setservername(2, (char *)"europe.pool.ntp.org"); // fallback
   sntp_setservername(3, (char *)"pool.ntp.org");        // fallback
+  sntp_init();
   sntp_set_time_sync_notification_cb(sntp_sync_notify);
 
   if (config->haveName()) {
@@ -704,7 +847,7 @@ void Network::setReason(int r) {
 }
 
 void Network::DiscardCurrentNetwork() {
-  ESP_LOGE(network_tag, "Discarding network \"%s\"", mywifi[network_id].ssid);
+  ESP_LOGD(network_tag, "Discarding network \"%s\"", mywifi[network_id].ssid);
   mywifi[network_id].discard = true;
 }
 
