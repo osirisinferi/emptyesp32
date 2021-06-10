@@ -30,6 +30,7 @@
 #undef B1000000
 #include <esp_littlefs.h>
 
+#if 0
 Config::Config(String mac) {
   name = 0;
 
@@ -92,6 +93,7 @@ Config::Config(String mac) {
   // This must be last
   my_config.mac = strdup(mac.c_str());
 }
+#endif
 
 Config::Config(char *mac) {
   name = 0;
@@ -246,7 +248,7 @@ void Config::ReadConfig(const char *js) {
   }
 }
 
-void Config::ConfigInt(JsonObject &jo, const char *name, uint16_t *ptr) {
+void Config::ConfigShort(JsonObject &jo, const char *name, int16_t *ptr) {
   if (jo.containsKey(name)) {
     uint16_t i = jo[name];
     *ptr = i;
@@ -279,42 +281,42 @@ void Config::ConfigBool(JsonObject &jo, const char *name, bool *ptr) {
  * Initialization should only happen in the Config CTOR.
  */
 void Config::ParseConfig(JsonObject &jo) {
-  ConfigInt(jo, "sirenPin", &siren_pin);
+  ConfigShort(jo, "sirenPin", &siren_pin);
   ConfigString(jo, "name", &name);
 
-  ConfigInt(jo, "redPin", &rgb_red_pin);
-  ConfigInt(jo, "greenPin", &rgb_green_pin);
-  ConfigInt(jo, "bluePin", &rgb_blue_pin);
+  ConfigShort(jo, "redPin", &rgb_red_pin);
+  ConfigShort(jo, "greenPin", &rgb_green_pin);
+  ConfigShort(jo, "bluePin", &rgb_blue_pin);
 
-  ConfigInt(jo, "radioPin", &radio_pin);
+  ConfigShort(jo, "radioPin", &radio_pin);
   ConfigBool(jo, "haveOled", &oled);
 
-  ConfigInt(jo, "oledLedPin", &oled_led_pin);
-  ConfigInt(jo, "oledDCPin", &oled_dc_pin);
-  ConfigInt(jo, "oledCSPin", &oled_cs_pin);
-  ConfigInt(jo, "oledResetPin", &oled_reset_pin);
+  ConfigShort(jo, "oledLedPin", &oled_led_pin);
+  ConfigShort(jo, "oledDCPin", &oled_dc_pin);
+  ConfigShort(jo, "oledCSPin", &oled_cs_pin);
+  ConfigShort(jo, "oledResetPin", &oled_reset_pin);
 
-  ConfigInt(jo, "i2cSdaPin", &i2c_sda_pin);
-  ConfigInt(jo, "i2cSclPin", &i2c_scl_pin);
+  ConfigShort(jo, "i2cSdaPin", &i2c_sda_pin);
+  ConfigShort(jo, "i2cSclPin", &i2c_scl_pin);
 
-  ConfigInt(jo, "brightness_low", &brightness_low);
-  ConfigInt(jo, "brightness_high", &brightness_high);
-  ConfigInt(jo, "update_timeout", &update_timeout);
+  ConfigShort(jo, "brightness_low", &brightness_low);
+  ConfigShort(jo, "brightness_high", &brightness_high);
+  ConfigShort(jo, "update_timeout", &update_timeout);
 
   ConfigString(jo, "timezone", &tz);
   ConfigString(jo, "rfidType", &rfidType);
   rfid = (rfidType != 0);
 
-  ConfigInt(jo, "rfidRstPin", &rfid_rst_pin);
-  ConfigInt(jo, "rfidSsPin", &rfid_ss_pin);
+  ConfigShort(jo, "rfidRstPin", &rfid_rst_pin);
+  ConfigShort(jo, "rfidSsPin", &rfid_ss_pin);
   if (rfid_rst_pin < 0 || rfid_ss_pin < 0)
     rfid = false;
 
   ConfigBool(jo, "weather", &weather);
   ConfigBool(jo, "secure", &secure);
 
-  ConfigInt(jo, "rfm69_slave_pin", &rfm69_slave_pin);
-  ConfigInt(jo, "rfm69_int_pin", &rfm69_int_pin);
+  ConfigShort(jo, "rfm69_slave_pin", &rfm69_slave_pin);
+  ConfigShort(jo, "rfm69_int_pin", &rfm69_int_pin);
   ConfigBool(jo, "rfm69_is_rfm69hw", &rfm69_is_rfm69hw);
   ConfigInt(jo, "rfm69_freq_band", &rfm69_freq_band);
   ConfigInt(jo, "rfm69_node_id", &rfm69_node_id);
@@ -467,7 +469,7 @@ void Config::AddDeviceMAC(const char *mac, bool ota) {
 
 #ifdef USE_HARDCODED_CONFIG
 void Config::HardCodedConfig(const char *mac) {
-  boolean found = false;
+  bool found = false;
   for (int i=0; configs[i].mac != 0; i++) {
     // Decode only the entry we need for auto-configuration purpose
     if (strcasecmp(configs[i].mac, mac) == 0) {
@@ -497,40 +499,40 @@ char *Config::QueryConfig() {
 	led_pin_s[8], cs_pin_s[8], dc_pin_s[8], reset_pin_s[8];
 
   if (siren_pin > 0) {
-    sprintf(siren_pin_s, "%d", siren_pin);
+    snprintf(siren_pin_s, sizeof(siren_pin_s), "%d", siren_pin);
     json["sirenPin"] = siren_pin_s;
   }
   if (radio_pin > 0) {
-    sprintf(radio_pin_s, "%d", radio_pin);
+    snprintf(radio_pin_s, sizeof(radio_pin_s), "%d", radio_pin);
     json["radioPin"] = radio_pin_s;
   }
   if (oled_led_pin > 0) {
-    sprintf(led_pin_s, "%d", oled_led_pin);
+    snprintf(led_pin_s, sizeof(led_pin_s), "%d", oled_led_pin);
     json["oledLedPin"] = led_pin_s;
   }
   if (oled_dc_pin > 0) {
-    sprintf(dc_pin_s, "%d", oled_dc_pin);
+    snprintf(dc_pin_s, sizeof(dc_pin_s), "%d", oled_dc_pin);
     json["oledDCPin"] = dc_pin_s;
   }
   if (oled_cs_pin > 0) {
-    sprintf(cs_pin_s, "%d", oled_cs_pin);
+    snprintf(cs_pin_s, sizeof(cs_pin_s), "%d", oled_cs_pin);
     json["oledCSPin"] = cs_pin_s;
   }
   if (oled_reset_pin > 0) {
-    sprintf(reset_pin_s, "%d", oled_reset_pin);
+    snprintf(reset_pin_s, sizeof(reset_pin_s), "%d", oled_reset_pin);
     json["oledResetPin"] = reset_pin_s;
   }
 
   if (rgb_red_pin > 0) {
-    sprintf(red_pin_s, "%d", rgb_red_pin);
+    snprintf(red_pin_s, sizeof(red_pin_s), "%d", rgb_red_pin);
     json["redPin"] = red_pin_s;
   }
   if (rgb_green_pin > 0) {
-    sprintf(green_pin_s, "%d", rgb_green_pin);
+    snprintf(green_pin_s, sizeof(green_pin_s), "%d", rgb_green_pin);
     json["greenPin"] = green_pin_s;
   }
   if (rgb_blue_pin > 0) {
-    sprintf(blue_pin_s, "%d", rgb_blue_pin);
+    snprintf(blue_pin_s, sizeof(blue_pin_s), "%d", rgb_blue_pin);
     json["bluePin"] = blue_pin_s;
   }
 
@@ -633,7 +635,7 @@ void Config::WriteConfig() {
   free(s);
 }
 
-boolean Config::haveOled() {
+bool Config::haveOled() {
   return oled;
 }
 
@@ -653,15 +655,15 @@ int Config::GetOledResetPin() {
   return oled_reset_pin;
 }
 
-boolean Config::haveRadio() {
+bool Config::haveRadio() {
   return (radio_pin >= 0);
 }
 
-boolean Config::haveWeather() {
+bool Config::haveWeather() {
   return weather;
 }
 
-boolean Config::haveSecure() {
+bool Config::haveSecure() {
   return secure;
 }
 
@@ -693,7 +695,7 @@ int Config::GetI2cSclPin() {
   return i2c_scl_pin;
 }
 
-boolean Config::haveRfid() {
+bool Config::haveRfid() {
   return rfid;
 }
 
@@ -747,15 +749,15 @@ int Config::GetRgbBluePin() {
   return rgb_blue_pin;
 }
 
-boolean Config::haveSiren() {
+bool Config::haveSiren() {
   return (siren_pin >= 0);
 }
 
-boolean Config::haveRgbLED() {
+bool Config::haveRgbLED() {
   return ((rgb_red_pin >= 0) && (rgb_green_pin >= 0) && (rgb_blue_pin >= 0));
 }
 
-boolean Config::haveLED() {
+bool Config::haveLED() {
   // Only takes RGB LED into account
   if ((rgb_red_pin >= 0) && (rgb_green_pin >= 0) && (rgb_blue_pin >= 0))
     return true;
@@ -924,7 +926,7 @@ int Config::haveBME280() {
   return bme;
 }
 
-boolean Config::haveTemperature() {
+bool Config::haveTemperature() {
   return (bme >= 0 || mcp >= 0);
 }
 

@@ -57,7 +57,6 @@ struct config_module_registration {
 
 class Config {
 public:
-  Config(String);
   Config(char *);
   void ReadConfig();
   ~Config();
@@ -173,29 +172,29 @@ public:
 
 private:
   void ConfigInt(JsonObject &jo, const char *name, int *ptr);
-  void ConfigInt(JsonObject &jo, const char *name, uint16_t *ptr);
+  void ConfigShort(JsonObject &jo, const char *name, int16_t *ptr);
   void ConfigString(JsonObject &jo, const char *name, char **ptr);
   void ConfigBool(JsonObject &jo, const char *name, bool *ptr);
 
-  int siren_pin;
-  int radio_pin;
-  int rgb_red_pin, rgb_blue_pin, rgb_green_pin;
+  int16_t siren_pin;
+  int16_t radio_pin;
+  int16_t rgb_red_pin, rgb_blue_pin, rgb_green_pin;
 
   bool oled;
   char *name;
-  int oled_led_pin, oled_cs_pin, oled_dc_pin, oled_reset_pin;
+  int16_t oled_led_pin, oled_cs_pin, oled_dc_pin, oled_reset_pin;
 
   bool rfid;
   bool weather;
   bool secure;
 
   char *rfidType;	// mfrc522 or pn532
-  int rfid_rst_pin, rfid_ss_pin;
+  int16_t rfid_rst_pin, rfid_ss_pin;
 
-  int brightness_low, brightness_high;
+  int16_t brightness_low, brightness_high;
 
   // i2c
-  int i2c_sda_pin, i2c_scl_pin;
+  int16_t i2c_sda_pin, i2c_scl_pin;
 
   int dirty;
   void ReadConfig(const char *);
@@ -209,12 +208,13 @@ private:
 
   const char *config_tag = "Config";
 
-  uint16_t update_timeout;
+  int16_t update_timeout;
 
   char *tz;
 
   // RFM69
-  int rfm69_slave_pin, rfm69_int_pin, rfm69_freq_band, rfm69_node_id, rfm69_network_id;
+  int16_t rfm69_slave_pin, rfm69_int_pin;
+  int rfm69_freq_band, rfm69_node_id, rfm69_network_id;
   bool rfm69_is_rfm69hw;
 
   bool gtwt02;
