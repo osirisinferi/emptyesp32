@@ -47,8 +47,8 @@
 
 #ifndef MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0x4000
-typedef void * gnutls_session_t;
 #endif
+typedef void * gnutls_session_t;
 
 void * x_malloc(size_t size);	// Forward declaration, avoid additional files
 

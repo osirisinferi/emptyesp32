@@ -26,7 +26,7 @@
 #define	_WEBSERVER_H_
 
 #include <esp_wifi.h>
-#include <esp_event_loop.h>
+#include <esp_event.h>
 #include <esp_https_server.h>
 
 class WebServer {
@@ -58,5 +58,5 @@ class WebServer {
     const unsigned char *ReadFile(const char *fn, int *plen);
 };
 
-extern WebServer *ws;
+extern WebServer *_ws;
 #endif	/* _WEBSERVER_H_ */

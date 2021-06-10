@@ -45,9 +45,6 @@ Secure::Secure() {
   WaitForAcmeCertificate = false;
   client_certs = 0;
 
-  void AddDeviceMAC(const char *mac, bool ota);
-  void AddDeviceIP(in_addr_t ip, bool ota);
-
   config->RegisterModule(secure_tag, 0, AddDeviceMAC, AddDeviceIP);
 }
 
@@ -89,19 +86,19 @@ void Secure::NetworkDisconnected(void *ctx, system_event_t *event) {
   TlsServerStopTask();
 }
 
-boolean Secure::isIPSecure(struct sockaddr_in *sender) {
-  boolean ok = CheckPeerIP(sender);
+bool Secure::isIPSecure(struct sockaddr_in *sender) {
+  bool ok = CheckPeerIP(sender);
   ESP_LOGD(secure_tag, "%s -> %s", __FUNCTION__, ok ? "safe" : "no");
   return ok;
 }
 
-boolean Secure::isOTAAllowed(struct sockaddr_in *sender) {
-  boolean ok = CheckPeerIP(sender, true);
+bool Secure::isOTAAllowed(struct sockaddr_in *sender) {
+  bool ok = CheckPeerIP(sender, true);
   ESP_LOGD(secure_tag, "%s -> %s", __FUNCTION__, ok ? "safe" : "no");
   return ok;
 }
 
-boolean Secure::isPeerSecure(int sock) {
+bool Secure::isPeerSecure(int sock) {
   struct sockaddr_in sa;
   socklen_t al = sizeof(sa);
 
@@ -135,12 +132,12 @@ boolean Secure::isPeerSecure(int sock) {
  * Note it looks like the first connection is always lost because the ARP table is still too empty at the time.
  * Initial entries appear to include the ESP itself and the network's router.
  */
-boolean Secure::CheckPeerIP(struct sockaddr_in *sap) {
+bool Secure::CheckPeerIP(struct sockaddr_in *sap) {
   return CheckPeerIP(sap, false);
 }
 
 // If 2nd parameter is true, additionally check if OTA is allowed
-boolean Secure::CheckPeerIP(struct sockaddr_in *sap, bool ota) {
+bool Secure::CheckPeerIP(struct sockaddr_in *sap, bool ota) {
   struct eth_addr ea, *eap = &ea;
   const ip4_addr_t *iap;
   s8_t ix;
@@ -178,7 +175,7 @@ boolean Secure::CheckPeerIP(struct sockaddr_in *sap, bool ota) {
   return false;
 }
 
-void AddDeviceMAC(const char *mac, bool ota) {
+void Secure::AddDeviceMAC(const char *mac, bool ota) {
   if (security)
     security->AddDevice(mac, ota);
 }
@@ -210,7 +207,7 @@ void Secure::AddDevice(const char *mac, bool ota) {
   ndevices++;
 }
 
-void AddDeviceIP(in_addr_t ip, bool ota) {
+void Secure::AddDeviceIP(in_addr_t ip, bool ota) {
   if (security)
     security->AddDevice(ip, ota);
 }
@@ -289,6 +286,7 @@ int Secure::TlsSetup() {
 }
 #else
 void Secure::TlsServerStartTask() {
+  ESP_LOGI(tls_tag, "No tls task started");
 }
 
 void Secure::TlsServerStopTask() {
@@ -791,7 +789,7 @@ void Secure::TlsTaskLoop(void *ptr) {
      *    on our whitelist. That's what the code below does.
      */
     if (config->checkLocalCertificates() && crt) {
-      boolean ok = false;
+      bool ok = false;
 
       // Validate whether the client is authorized
       // for (int i=0; i<ntrusts; i++) {

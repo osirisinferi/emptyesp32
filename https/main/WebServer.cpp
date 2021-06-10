@@ -79,6 +79,9 @@ void WebServer::Start() {
 
   scfg.port_secure = config->getWebServerSecure();
   scfg.port_insecure = config->getWebServerPort();
+  // scfg.httpd.verify_mode = SSL_VERIFY_PEER;
+  // scfg.httpd.global_user_ctx.verify_mode = SSL_VERIFY_PEER;
+  // ESP_LOGE(webserver_tag, "%s: GUctx %p", __FUNCTION__, scfg.httpd.global_user_ctx);
 
 # ifdef USE_ACME
   // Server certificate
@@ -234,10 +237,10 @@ esp_err_t WebServer::alarm_handler(httpd_req_t *req) {
   int	buflen;
   char	*buf;
 
-  ESP_LOGI(ws->webserver_tag, "%s - URI {%s}", __FUNCTION__, req->uri);
+  ESP_LOGI(_ws->webserver_tag, "%s - URI {%s}", __FUNCTION__, req->uri);
   buflen = httpd_req_get_url_query_len(req);
 
-  ESP_LOGD(ws->webserver_tag, "%s - httpd_req_get_url_query_len() => %d", __FUNCTION__, buflen);
+  ESP_LOGD(_ws->webserver_tag, "%s - httpd_req_get_url_query_len() => %d", __FUNCTION__, buflen);
 
   if (buflen == 0) {
     const char *reply = "Error: no parameters specified";
@@ -250,15 +253,15 @@ esp_err_t WebServer::alarm_handler(httpd_req_t *req) {
   esp_err_t e;
 
   if ((e = httpd_req_get_url_query_str(req, buf, buflen + 1)) == ESP_OK) {
-    ESP_LOGD(ws->webserver_tag, "%s found query => %s", __FUNCTION__, buf);
+    ESP_LOGD(_ws->webserver_tag, "%s found query => %s", __FUNCTION__, buf);
     char param[32];
 
     /* Get value of expected key from query string */
     if (httpd_query_key_value(buf, "armed", param, sizeof(param)) == ESP_OK) {
-      ESP_LOGD(ws->webserver_tag, "Found URL query parameter => armed = \"%s\"", param);
+      ESP_LOGD(_ws->webserver_tag, "Found URL query parameter => armed = \"%s\"", param);
     }
   } else {
-    ESP_LOGE(ws->webserver_tag, "%s: could not get URL query, error %s %d",
+    ESP_LOGE(_ws->webserver_tag, "%s: could not get URL query, error %s %d",
       __FUNCTION__, esp_err_to_name(e), e);
     free(buf);
     const char *reply = "Could not get url query";
@@ -268,7 +271,7 @@ esp_err_t WebServer::alarm_handler(httpd_req_t *req) {
   }
   free(buf);
 
-  ws->SendPage(req);
+  _ws->SendPage(req);
 #endif
   return ESP_OK;
 }
@@ -278,7 +281,7 @@ esp_err_t WebServer::alarm_handler(httpd_req_t *req) {
  * No status or error codes called.
  */
 void WebServer::SendPage(httpd_req_t *req) {
-  ESP_LOGD(ws->webserver_tag, "%s", __FUNCTION__);
+  ESP_LOGD(_ws->webserver_tag, "%s", __FUNCTION__);
 
   // Reply
 #ifdef USE_WEATHER
@@ -389,17 +392,17 @@ esp_err_t index_handler(httpd_req_t *req) {
     if (getpeername(sock, (sockaddr *)&sa6, &salen) == 0) {
       struct sockaddr_in sa;
       sa.sin_addr.s_addr = sa6.sin6_addr.un.u32_addr[3];
-      ESP_LOGE(ws->webserver_tag, "%s: access attempt for %s from %s, not allowed",
+      ESP_LOGE(_ws->webserver_tag, "%s: access attempt for %s from %s, not allowed",
         __FUNCTION__, req->uri, inet_ntoa(sa.sin_addr));
     } else {
-      ESP_LOGE(ws->webserver_tag, "%s: access attempt for %s, not allowed", __FUNCTION__, req->uri);
+      ESP_LOGE(_ws->webserver_tag, "%s: access attempt for %s, not allowed", __FUNCTION__, req->uri);
     }
 
     httpd_resp_set_status(req, "401 Not authorized");
     return ESP_OK;
   }
 
-  ws->SendPage(req);
+  _ws->SendPage(req);
   return ESP_OK;
 }
 #endif
@@ -416,20 +419,20 @@ httpd_handle_t WebServer::getSSLServer() {
 }
 
 esp_err_t WebServer::WsNetworkConnected(void *ctx, system_event_t *event) {
-  ESP_LOGD(ws->webserver_tag, "Starting WebServer");
+  ESP_LOGD(_ws->webserver_tag, "Starting WebServer");
 
-  ws->Start();
+  _ws->Start();
 #ifdef USE_ACME
-  if (acme) acme->setWebServer(ws->getRegularServer());
+  if (acme) acme->setWebServer(_ws->getRegularServer());
 #endif
   return ESP_OK;
 }
 
 esp_err_t WebServer::WsNetworkDisconnected(void *ctx, system_event_t *event) {
-  if (ws->getRegularServer())
-    httpd_stop(ws->getRegularServer());
-  if (ws->getSSLServer())
-    httpd_stop(ws->getSSLServer());
+  if (_ws->getRegularServer())
+    httpd_stop(_ws->getRegularServer());
+  if (_ws->getSSLServer())
+    httpd_stop(_ws->getSSLServer());
   return ESP_OK;
 }
 #endif	/* USE_HTTP_SERVER */

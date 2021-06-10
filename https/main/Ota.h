@@ -25,7 +25,7 @@
 #define	_OTA_H_
 
 #include <esp_wifi.h>
-#include <esp_event_loop.h>
+#include <esp_event.h>
 #include <esp_http_server.h>
 #include "esp_ota_ops.h"
 

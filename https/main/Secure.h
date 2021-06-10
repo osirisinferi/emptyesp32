@@ -104,6 +104,9 @@ class Secure {
 
     const char	*cert_path = "%s/certificate/*.cert",
     		*cert_dir = "%s/certificate/";
+
+    static void AddDeviceMAC(const char *mac, bool ota);
+    static void AddDeviceIP(in_addr_t ip, bool ota);
 };
 
 extern Secure *security;
