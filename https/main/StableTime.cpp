@@ -27,7 +27,7 @@
 #include "Network.h"
 #include "StableTime.h"
 #include <esp_event_loop.h>
-#include <apps/sntp/sntp.h>
+#include <esp_sntp.h>
 #include <esp_log.h>
 
 const char *st_tag = "StableTime";
