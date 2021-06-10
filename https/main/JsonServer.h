@@ -26,7 +26,7 @@
 #define	_JSONSERVER_H_
 
 #include <esp_wifi.h>
-#include <esp_event_loop.h>
+#include <esp_event.h>
 #include <esp_https_server.h>
 
 class JsonServer {

@@ -17,3 +17,9 @@ So what is this ?
 - Webservers for http and https, ports configurable.
 - ACME client and dynamic DNS library is called so the device can have its own real certificates for
   communication via e.g. https.
+
+Note the event handler calls too much stuff when getting an IP address, for which it requires more stack size than by default. This (doing much in an event handler) is not encouraged, but we do this just on disruptive events so we don't worry about long duration in the handler. Side effect : we need a large stack for the event task :
+  default :	CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=2304
+  our :		CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096
+
+

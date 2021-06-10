@@ -28,10 +28,6 @@
 
 #include "App.h"
 
-// Forward definitions of static functions
-esp_err_t json_handler(httpd_req_t *req);
-void NewWebServer(httpd_handle_t, httpd_handle_t);
-
 JsonServer::JsonServer() {
   network->RegisterModule(jsonserver_tag, NULL, NULL, NULL, NewWebServer);
 
@@ -102,6 +98,8 @@ void JsonServer::NewWebServer(httpd_handle_t usrv, httpd_handle_t ssrv) {
 
 esp_err_t JsonServer::json_handler(httpd_req_t *req) {
   const char *tag = jsonsrv->jsonserver_tag;
+
+  ESP_LOGE(jsonserver_tag, "%s(%p)", __FUNCTION__, req);
 
   if (jsonsrv->isConnectionAllowed(req) != ESP_OK) {
     const char *reply = "Error: connection not allowed";
@@ -187,6 +185,85 @@ esp_err_t JsonServer::json_handler(httpd_req_t *req) {
   return ESP_OK;
 }
 
+// components/openssl/include/internal/ssl_types.h
+#include <internal/ssl_types.h>
 bool JsonServer::isConnectionAllowed(httpd_req_t *req) {
+  return ESP_OK;
+
+  // Check whether this socket is secure.
+  int sock = httpd_req_to_sockfd(req);
+
+#if 0
+  if (! security->isPeerSecure(sock)) {
+    const char *reply = "<!DOCTYPE html><html><head><title>Not authorized</title></head><body>Error: not authorized</body></html>";
+    httpd_resp_send(req, reply, strlen(reply));
+    httpd_resp_send_500(req);
+    return ESP_OK;
+  }
+#endif
+
+/*
+  // SSL_CTX *httpd_get_global_transport_ctx()
+  void *gctx = httpd_get_global_transport_ctx(jsonsrv->ssrv);
+  ESP_LOGE(jsonserver_tag, "%s: httpd_get_global_transport_ctx -> %p", __FUNCTION__, gctx);
+  SSL_CTX *pssl = (SSL_CTX *)gctx;
+  ESP_LOGI(jsonserver_tag, "SSL version %d refs %d options 0x%lX CERT %p client-ca %p",
+    pssl->version, pssl->references, pssl->options, pssl->cert, pssl->client_CA);
+
+  CERT *pcert = pssl->cert;
+  ESP_LOGI(jsonserver_tag, "CERT sec lvl %d X509 %p pkey %p", 
+    pcert->sec_level, pcert->x509, pcert->pkey);
+
+  // struct x509_st
+  X509 *client_CA = pssl->client_CA;
+
+  //
+  void *ctx = httpd_sess_get_ctx(jsonsrv->ssrv, sock);
+  ESP_LOGE(jsonserver_tag, "%s: httpd_sess_get_ctx(https) -> %p", __FUNCTION__, ctx);
+  if (ctx == 0) {
+    ctx = httpd_sess_get_ctx(jsonsrv->usrv, sock);
+    ESP_LOGE(jsonserver_tag, "%s: httpd_sess_get_ctx(http) -> %p", __FUNCTION__, ctx);
+  }
+  if (ctx == 0) {
+    ESP_LOGE(jsonserver_tag, "%s: no context", __FUNCTION__);
+  }
+
+  void *guc = httpd_get_global_user_ctx(jsonsrv->ssrv);
+  ESP_LOGE(jsonserver_tag, "%s: httpd_get_global_user_ctx(https) -> %p", __FUNCTION__, guc);
+ */
+
+  /*
+   * Try the HTTP server context first
+   *
+   * Note : created like this :
+   * SSL_CTX *global_ctx = httpd_get_global_transport_ctx(server);
+   * SSL *ssl = SSL_new(global_ctx);
+   * // Store the SSL session into the context field of the HTTPD session object
+   * httpd_sess_set_transport_ctx(server, sockfd, ssl, httpd_ssl_close);
+   */
+
+#if 0
+  void *sctx = httpd_sess_get_transport_ctx(jsonsrv->ssrv, sock);
+  ESP_LOGE(jsonserver_tag, "%s: httpd_sess_get_transport_ctx(https) -> %p", __FUNCTION__, sctx);
+  if (sctx == 0) {
+    // If not valid, the HTTPS
+    sctx = httpd_sess_get_transport_ctx(jsonsrv->usrv, sock);
+    ESP_LOGE(jsonserver_tag, "%s: httpd_sess_get_transport_ctx(http) -> %p", __FUNCTION__, sctx);
+  }
+  if (sctx == 0) {
+    ESP_LOGE(jsonserver_tag, "%s: no session context", __FUNCTION__);
+    // return ESP_FAIL;
+  }
+#endif
+
+  // SSL * -> struct ssl_st * <openssl/include/internal/ssl_types.h>
+  void *sctx = httpd_sess_get_transport_ctx(jsonsrv->ssrv, sock);
+  ESP_LOGE(jsonserver_tag, "%s: httpd_sess_get_transport_ctx(https) -> %p", __FUNCTION__, sctx);
+  if (sctx) {
+    struct ssl_st *pctx = (struct ssl_st *)sctx;
+    ESP_LOGE(jsonserver_tag, "  cert %p client_ca %p ctx %p sess %p verify_mode %x",
+      pctx->cert, pctx->client_CA, pctx->ctx, pctx->session, pctx->verify_mode);
+  }
+
   return ESP_OK;
 }
