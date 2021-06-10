@@ -37,7 +37,7 @@ Dyndns			*dyndns = 0,
 #endif
 Secure			*security = 0;
 #ifdef USE_HTTP_SERVER
-WebServer		*ws = 0, *uws = 0;
+WebServer		*_ws = 0, *uws = 0;
 #endif
 JsonServer		*jsonsrv = 0;
 
@@ -52,7 +52,6 @@ void setup(void) {
 void App::setup(void) {
   // Serial.begin(115200);
 
-  delay(250);
   esp_log_level_set("*", ESP_LOG_INFO);
   esp_log_level_set("memory_layout", ESP_LOG_ERROR);
   esp_log_level_set("heap_init", ESP_LOG_ERROR);
@@ -65,6 +64,10 @@ void App::setup(void) {
   esp_log_level_set("efuse", ESP_LOG_ERROR);
   esp_log_level_set("httpd_parse", ESP_LOG_DEBUG);
   esp_log_level_set("esp_http_client", ESP_LOG_DEBUG);
+
+  /* ESP-IDF 4.x */
+  esp_log_level_set("esp_netif_handlers", ESP_LOG_ERROR);
+  esp_log_level_set("esp-tls-mbedtls", ESP_LOG_VERBOSE);
 
   ESP_LOGI(app_tag, "https server tester (c) 2017, 2018, 2019, 2020, 2021 by Danny Backx");
 
@@ -104,15 +107,12 @@ void App::setup(void) {
   ESP_ERROR_CHECK(esp_wifi_get_mac(ESP_IF_WIFI_STA, smac));
 
   // Translate into readable format
-  String macs = "";
+  char macs[24];
   for (int i=0; i<6; i++) {
-    char xx[3];
-    sprintf(xx, "%02x", smac[i]);
-    macs += xx;
+    sprintf(&macs[3 * i], "%02x", smac[i]);
     if (i < 5)
-      macs += ":";
+      macs[3*i+2] = ':';
   }
-  strcpy(lmac, macs.c_str());
 
   /*
    * Initialize LittleFS : we always use it to read config
@@ -190,7 +190,7 @@ void App::setup(void) {
   }
 
   // Do ACME if we have a secure server, and we require it
-  if ((config->getJSONServerPort() > 0) && config->runAcme()) {
+  if (config->runAcme()) {
 
     acme->setUrl(config->acmeUrl());
     const char **alt = NULL;
@@ -211,6 +211,8 @@ void App::setup(void) {
     if (alt)
       for (int i=0; alt[i]; i++)
         ESP_LOGI("Acme", "Alt URL %s", alt[i]);
+#if 0
+    // Lots of detail about ACME
     ESP_LOGI("Acme", "Server %s", config->acmeServerUrl());
     ESP_LOGI("Acme", "Email %s", config->acmeEmailAddress());
 
@@ -219,6 +221,7 @@ void App::setup(void) {
     ESP_LOGI("Acme", "Account key fn %s", config->acmeAccountKeyFilename());
     ESP_LOGI("Acme", "Certificate key fn %s", config->acmeCertKeyFilename());
     ESP_LOGI("Acme", "Certificate fn %s", config->acmeCertificateFilename());
+#endif
 
 #if 0
     /* *** TEST *** */
@@ -239,11 +242,11 @@ void App::setup(void) {
         acme->GenerateCertificateKey();
       }
 
-      ESP_LOGI(app_tag, "Don't have a valid certificate ...");
+      ESP_LOGE(app_tag, "Don't have a valid certificate ...");
       // acme->CreateNewAccount();
       // acme->CreateNewOrder();
     } else {
-      ESP_LOGI(app_tag, "Certificate is valid");
+      ESP_LOGD(app_tag, "Certificate is valid");
     }
   }
 
@@ -259,7 +262,7 @@ void App::setup(void) {
       ESP_LOGE(app_tag, "Can't run DynDNS - insufficient configuration");
     } else {
       dyndns->setHostname(config->dyndns_url());
-      ESP_LOGI(app_tag, "Running DynDNS for domain %s", config->dyndns_url());
+      ESP_LOGD(app_tag, "Running DynDNS for domain %s", config->dyndns_url());
       dyndns->setAuth(config->dyndns_auth());
       ESP_LOGD(app_tag, "DynDNS auth %s", config->dyndns_auth());
     }
@@ -275,7 +278,6 @@ void App::setup(void) {
   }
 #elif defined(USE_ACME_CONFIG)	// print out the ACME configuration nevertheless
   ESP_LOGI(app_tag, "FS prefix %s", config->getFilePrefix());
-  ESP_LOGI(app_tag, "JSON server port %d", config->getJSONServerPort());
 
   ESP_LOGI(app_tag, "ACME URL %s", config->acmeUrl());
   ESP_LOGI(app_tag, "ACME server URL %s", config->acmeServerUrl());
@@ -289,7 +291,7 @@ void App::setup(void) {
 
 #ifdef USE_HTTP_SERVER
   if (config->getWebServerPort() != -1) {
-    ws = new WebServer();
+    _ws = new WebServer();
   }
   jsonsrv = new JsonServer();
 
@@ -366,15 +368,15 @@ void App::loop() {
 
 #ifdef USE_ACME
   if (network->isConnected()) {
-    // Weekly DynDNS update (1w = 86400s)
+    // Daily DynDNS update
     if (dyndns && (nowts > 1000000L)) {
       if ((dyndns_timeout == 0) || (nowts > dyndns_timeout)) {
 	if (dyndns->update()) {
-	  ESP_LOGI(app_tag, "DynDNS update succeeded");
-	  // On success, repeat after a week
+	  ESP_LOGI(app_tag, "DynDNS update succeeded for %s", dyndns->getHostname());
+	  // On success, repeat daily
 	  dyndns_timeout = nowts + 86400;
 	} else {
-	  ESP_LOGE(app_tag, "DynDNS update failed");
+	  ESP_LOGE(app_tag, "DynDNS update failed for %s", dyndns->getHostname());
 	  // On failure, retry after a minute
 	  dyndns_timeout = nowts + 65;
 	}
@@ -384,11 +386,11 @@ void App::loop() {
     if (dyndns2 && (nowts > 1000000L)) {
       if ((dyndns2_timeout == 0) || (nowts > dyndns2_timeout)) {
 	if (dyndns2->update()) {
-	  ESP_LOGI(app_tag, "DynDNS-2 update succeeded");
-	  // On success, repeat after a week
+	  ESP_LOGI(app_tag, "DynDNS update succeeded for %s", dyndns2->getHostname());
+	  // On success, repeat daily
 	  dyndns2_timeout = nowts + 86400;
 	} else {
-	  ESP_LOGE(app_tag, "DynDNS-2 update failed");
+	  ESP_LOGE(app_tag, "DynDNS update failed for %s", dyndns2->getHostname());
 	  // On failure, retry after a minute
 	  dyndns2_timeout = nowts + 65;
 	}
@@ -410,7 +412,7 @@ void App::loop() {
 /*
  * Stolen from cores/esp32/esp32-hal-misc.c to avoid linking in Arduino.
  */
-static void MyInitArduino() {
+void MyInitArduino() {
 #ifdef CONFIG_APP_ROLLBACK_ENABLE
     const esp_partition_t *running = esp_ota_get_running_partition();
     esp_ota_img_states_t ota_state;
@@ -419,7 +421,7 @@ static void MyInitArduino() {
             if (verifyOta()) {
                 esp_ota_mark_app_valid_cancel_rollback();
             } else {
-                log_e("OTA verification failed! Start rollback to the previous version ...");
+                ESP_LOGE(app_tag, "OTA verification failed! Start rollback to the previous version ...");
                 esp_ota_mark_app_invalid_rollback_and_reboot();
             }
         }
@@ -436,12 +438,12 @@ static void MyInitArduino() {
 	if (!err) {
 	  err = nvs_flash_init();
 	} else {
-	  log_e("Failed to format the broken NVS partition!");
+	  ESP_LOGE(app->app_tag, "Failed to format the broken NVS partition!");
 	}
       }
     }
     if (err) {
-        log_e("Failed to initialize NVS! Error: %u", err);
+        ESP_LOGE(app->app_tag, "Failed to initialize NVS! Error: %u", err);
     }
 
 #ifdef CONFIG_BT_ENABLED
@@ -451,9 +453,6 @@ static void MyInitArduino() {
 #endif
 }
 
-#if CONFIG_AUTOSTART_ARDUINO
-#warning "using Arduino, not source, setup/loop functions"
-#else
 extern "C" {
   /*
    * https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/mem_alloc.html
@@ -475,7 +474,6 @@ extern "C" {
       loop();
   }
 }
-#endif
 
 esp_err_t App::app_connect(void *a, system_event_t *ep) {
   if (config->runFtp()) {
@@ -507,7 +505,7 @@ App::App() {
 #endif
   security = 0;
 #ifdef USE_HTTP_SERVER
-  ws = 0;
+  _ws = 0;
   uws = 0;
 #endif
 

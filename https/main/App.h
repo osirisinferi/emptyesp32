@@ -35,8 +35,6 @@
 
 #define	CONFIG_CONFIG_FN	"config.json"
 
-#include <Arduino.h>
-
 #include "secrets.h"
 #include "Config.h"
 #include "Network.h"
@@ -53,7 +51,6 @@
 #include <JsonServer.h>
 
 #include <esp_log.h>
-#include <apps/sntp/sntp.h>
 
 class App {
 public:
@@ -64,7 +61,6 @@ public:
   void Report(const char *line);
 
 // Global variables
-  String	ips, gws;
   bool		OTAbusy;
   time_t	nowts, boot_time;
   const char	*build;
@@ -90,6 +86,7 @@ private:
   static esp_err_t app_connect(void *a, system_event_t *ep);
   static esp_err_t app_disconnect(void *a, system_event_t *ep);
   static void delayed_start(struct timeval *tvp);
+  friend void MyInitArduino();
 };
 
 extern App	*app;
