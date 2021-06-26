@@ -104,6 +104,7 @@ void App::setup(void) {
   network->SetupWifi();
 
   // Get short MAC
+  uint8_t	smac[20];
   ESP_ERROR_CHECK(esp_wifi_get_mac(ESP_IF_WIFI_STA, smac));
 
   // Translate into readable format
@@ -134,7 +135,7 @@ void App::setup(void) {
   /*
    * Initialize the Config, so it can be called by those who need to install a hook
    */
-  config = new Config(lmac);
+  config = new Config(macs);
 
   // Arrange for hooks (callbacks) in Config
   security = new Secure();
@@ -207,7 +208,7 @@ void App::setup(void) {
     acme->setCertKeyFilename(config->acmeCertKeyFilename());
     acme->setCertificateFilename(config->acmeCertificateFilename());
 
-    ESP_LOGI("Acme", "URL %s", config->acmeUrl());
+    ESP_LOGI("Acme", "URL %s", config->acmeUrl() ? config->acmeUrl() : "NULL");
     if (alt)
       for (int i=0; alt[i]; i++)
         ESP_LOGI("Acme", "Alt URL %s", alt[i]);

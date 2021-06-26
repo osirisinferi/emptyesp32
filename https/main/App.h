@@ -68,9 +68,6 @@ public:
 private:
   const char	*app_tag = "App";
 
-  uint8_t	smac[20];
-  char		lmac[18];
-
   time_t	dyndns_timeout = 0,
   		dyndns2_timeout = 0;
 

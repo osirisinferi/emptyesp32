@@ -411,11 +411,11 @@ void Config::ParseConfig(JsonObject &jo) {
     ESP_LOGD(config_tag, "includes[%d] : \"%s\"", i, includes[i]);
   }
 
-  // And for ACME alternative URLs
-  if (jo.containsKey("acme_alt_url")) {
+  // And for a list of ACME URLs
+  if (jo.containsKey("acme_urls")) {
     acme_alt_url = (char **)calloc(8, sizeof(char *));
     for (int i=0; i<8; i++) {
-      const char *u = jo["acme_alt_url"][i];
+      const char *u = jo["acme_urls"][i];
       if (u == 0)
         break;
       acme_alt_url[i] = strdup(u);
@@ -596,7 +596,7 @@ char *Config::QueryConfig() {
   json["acme_cert_fn"] = acme_cert_fn;
 
   if (acme_alt_url) {
-    JsonArray &ja = json.createNestedArray("acme_alt_url");
+    JsonArray &ja = json.createNestedArray("acme_urls");
     for (int i=0; acme_alt_url[i]; i++)
       ja.add(acme_alt_url[i]);
   }
@@ -834,7 +834,11 @@ const char *Config::acmeEmailAddress() {
 }
 
 const char *Config::acmeUrl() {
-  return acme_url;
+  if (acme_url)
+    return acme_url;
+  if (acme_alt_url && acme_alt_url[0])
+    return acme_alt_url[0];
+  return 0;
 }
 
 const char **Config::acmeAltUrl() {
