@@ -27,7 +27,11 @@
 #include <esp_http_server.h>
 #include <esp_log.h>
 #include <esp_sntp.h>
+#if (ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 0, 0))
 #include <esp_event_loop.h>
+#else
+#include <esp_event.h>
+#endif
 
 #include <list>
 using namespace std;
@@ -49,6 +53,7 @@ struct module_registration {
   esp_err_t (*NetworkDisconnected)(void *, system_event_t *);
   void (*TimeSync)(struct timeval *);
   void (*NewWebServer)(httpd_handle_t, httpd_handle_t);
+  void (*CertificateUpdate)();
   esp_err_t result;
 
   module_registration();
@@ -56,7 +61,8 @@ struct module_registration {
     esp_err_t NetworkConnected(void *, system_event_t *),
     esp_err_t NetworkDisconnected(void *, system_event_t *),
     void TimeSync(struct timeval *),
-    void NewWebServer(httpd_handle_t, httpd_handle_t));
+    void NewWebServer(httpd_handle_t, httpd_handle_t),
+    void CertificateUpdate());
 
   // Deal with keepalives on a per module basis
   time_t	ka_start,		// timestamp of last poll
@@ -85,6 +91,7 @@ public:
   Network();
   Network(const char *, esp_err_t (*nc)(void *, system_event_t *), esp_err_t (*nd)(void *, system_event_t *));
   Network(const char *, esp_err_t (*nc)(void *, system_event_t *), esp_err_t (*nd)(void *, system_event_t *), void (*ts)(struct timeval *), void (*nws)(httpd_handle_t, httpd_handle_t));
+  Network(const char *, esp_err_t (*nc)(void *, system_event_t *), esp_err_t (*nd)(void *, system_event_t *), void (*ts)(struct timeval *), void (*nws)(httpd_handle_t, httpd_handle_t), void (*cu)());
   ~Network();
 
   void loop(time_t now);
@@ -119,7 +126,8 @@ public:
     esp_err_t NetworkConnected(void *, system_event_t *),
     esp_err_t NetworkDisconnected(void *, system_event_t *),
     void TimeSync(struct timeval *),
-    void NewWebServer(httpd_handle_t, httpd_handle_t));
+    void NewWebServer(httpd_handle_t, httpd_handle_t),
+    void CertificateUpdate());
 
   void WebServerStarted(httpd_handle_t uws, httpd_handle_t sws);
 

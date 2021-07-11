@@ -52,9 +52,10 @@ Network::Network(const char *name,
     esp_err_t (*nc)(void *, system_event_t *),
     esp_err_t (*nd)(void *, system_event_t *),
     void (*ts)(struct timeval *),
-    void (*nws)(httpd_handle_t, httpd_handle_t)) {
+    void (*nws)(httpd_handle_t, httpd_handle_t),
+    void (*cu)()) {
   Network();
-  struct module_registration *mr = new module_registration(name, nc, nd, ts, nws);
+  struct module_registration *mr = new module_registration(name, nc, nd, ts, nws, cu);
   RegisterModule(mr);
 }
 
@@ -112,6 +113,7 @@ struct mywifi {
 
 const char *snetwork_tag = "Network";
 
+#if (ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 0, 0))
 static const char *EventId2String(int eid) {
   switch (eid) {
   case SYSTEM_EVENT_STA_START:			return "START";
@@ -130,6 +132,7 @@ static const char *EventId2String(int eid) {
   default:					return "?";
   }
 }
+#endif
 
 static const char *WifiReason2String(int r) {
   switch (r) {
@@ -408,7 +411,12 @@ void ip_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, 
 
 	// FIX ME how to treat result
 	mp->result = mp->NetworkConnected(ctx, (system_event_t *)event_data);
-	ESP_LOGI(snetwork_tag, "Network Connected : return %d from module %s", mp->result, mp->module);
+	if (mp->result)
+	  ESP_LOGE(snetwork_tag, "Network Connected : return %d from module %s",
+	    mp->result, mp->module);
+	else
+	  ESP_LOGD(snetwork_tag, "Network Connected : return %d from module %s",
+	    mp->result, mp->module);
       }
     }
 
@@ -869,22 +877,25 @@ module_registration::module_registration(const char *name,
   esp_err_t NetworkConnected(void *, system_event_t *),
   esp_err_t NetworkDisconnected(void *, system_event_t *),
   void TimeSync(struct timeval *),
-  void NewWebServer(httpd_handle_t, httpd_handle_t))
+  void NewWebServer(httpd_handle_t, httpd_handle_t),
+  void CertificateUpdate())
 {
   this->module = (char *)name;
   this->NetworkConnected = NetworkConnected;
   this->NetworkDisconnected = NetworkDisconnected;
   this->TimeSync = TimeSync;
   this->NewWebServer = NewWebServer;
+  this->CertificateUpdate = CertificateUpdate;
 }
 
 void Network::RegisterModule(const char *name,
     esp_err_t nc(void *, system_event_t *),
     esp_err_t nd(void *, system_event_t *),
     void ts(struct timeval *),
-    void nws(httpd_handle_t, httpd_handle_t)) {
+    void nws(httpd_handle_t, httpd_handle_t),
+    void cu()) {
   ESP_LOGD(network_tag, "RegisterModule(%s)", name);
-  struct module_registration *mr = new module_registration(name, nc, nd, ts, nws);
+  struct module_registration *mr = new module_registration(name, nc, nd, ts, nws, cu);
 
   RegisterModule(mr);
 }
@@ -893,7 +904,7 @@ void Network::RegisterModule(const char *name,
     esp_err_t nc(void *, system_event_t *),
     esp_err_t nd(void *, system_event_t *)) {
   ESP_LOGD(network_tag, "RegisterModule(%s)", name);
-  struct module_registration *mr = new module_registration(name, nc, nd, 0, 0);
+  struct module_registration *mr = new module_registration(name, nc, nd, 0, 0, 0);
 
   RegisterModule(mr);
 }

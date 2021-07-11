@@ -29,7 +29,7 @@
 #include "App.h"
 
 JsonServer::JsonServer() {
-  network->RegisterModule(jsonserver_tag, NULL, NULL, NULL, NewWebServer);
+  network->RegisterModule(jsonserver_tag, NULL, NULL, NULL, NewWebServer, NULL);
 
   usrv = ssrv = 0;
 }

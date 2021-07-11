@@ -41,18 +41,30 @@ class WebServer {
 
     void Start();	// Start servers when network becomes available
 
+    httpd_ssl_config_t	scfg;
+    unsigned char *cert_key, *cert;
+    bool start_secure;
+    httpd_config_t	cfg;
+
     // httpd_handle_t	server;		// legacy
     httpd_handle_t	usrv, ssrv;	// unencryped, and ssl server
 
     void SendPage(httpd_req_t *);
 
-    static esp_err_t index_handler(httpd_req_t *req);
     static esp_err_t alarm_handler(httpd_req_t *req);
-    static esp_err_t wildcard_handler(httpd_req_t *req);
+
+    void StartSSLServer();
+    void StopSSLServer();
+    void ConfigureSSLServer();
+    void FreeCerts();			// Undo allocations in ConfigureSSLServer()
+    void StartRegularServer();
+    void StopRegularServer();
+    void ConfigureRegularServer();
 
     // Hooks for Network
     static esp_err_t WsNetworkConnected(void *ctx, system_event_t *event);
     static esp_err_t WsNetworkDisconnected(void *ctx, system_event_t *event);
+    static void CertificateUpdate();
 
     //
     const unsigned char *ReadFile(const char *fn, int *plen);

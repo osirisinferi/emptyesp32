@@ -76,7 +76,7 @@ void App::setup(void) {
 
   /* Network */
   network = new Network();
-  network->RegisterModule(app_tag, app_connect, app_disconnect, delayed_start, 0);
+  network->RegisterModule(app_tag, app_connect, app_disconnect, delayed_start, 0, NULL);
 
   /* Print chip information */
   esp_chip_info_t chip_info;

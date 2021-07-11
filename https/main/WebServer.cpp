@@ -26,6 +26,7 @@
  * - a https server (e.g. on 443) to serve other stuff
  *
  * The servers are started when the network becomes available (hook from Network class).
+ * The CertificateUpdate hook will start the https server on certificate changes.
  *
  * Please make sure to protect access to this module, it still needs to be secured,
  * even the https server (encryption is not access control).
@@ -34,9 +35,9 @@
 /*
  * Options :
  *   only enabled with USE_HTTP_SERVER
- *   servers https if USE_HTTPS_SERVER, note this masks content but doesn't secure access
+ *   serves https if USE_HTTPS_SERVER, note this masks content but doesn't secure access
  *     with USE_ACME, the server will have a real certificate
- *     without USE_ACME, you'll have to provide a certificate (hardcoded)
+ *     without USE_ACME, you'll have to provide a hardcoded certificate
  */
 
 #include "App.h"
@@ -50,9 +51,12 @@
 #include "Secure.h"
 
 WebServer::WebServer() {
-  network->RegisterModule(webserver_tag, WsNetworkConnected, WsNetworkDisconnected);
+  network->RegisterModule(webserver_tag, WsNetworkConnected, WsNetworkDisconnected,
+  	0, 0, CertificateUpdate);
 
   usrv = ssrv = 0;
+  cert_key = 0;
+  cert = 0;
 }
 
 static const char *http_method2string(int m) {
@@ -65,20 +69,52 @@ static const char *http_method2string(int m) {
 }
 
 void WebServer::Start() {
-  esp_err_t		err = ESP_FAIL;
-
   // Only start if configured
   if (config->getWebServerPort() < 0 && config->getWebServerSecure() < 0)
     return;
 
+  /*
+   * Create SSL web server
+   */
+  ConfigureSSLServer();
+  StartSSLServer();
+  FreeCerts();
+
+  /*
+   * Create regular web server
+   */
+  ConfigureRegularServer();
+  StartRegularServer();
+
+  // Handler for arming from a browser
+  httpd_uri_t uri_hdl_def;
+  uri_hdl_def.uri = "/alarm";
+  uri_hdl_def.method = HTTP_GET;
+  uri_hdl_def.user_ctx = 0;
+  uri_hdl_def.handler = alarm_handler;
+  if (httpd_register_uri_handler(ssrv, &uri_hdl_def) != ESP_OK)
+    ESP_LOGE(webserver_tag, "%s: failed to register %s %s handler", __FUNCTION__, uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
+
+  network->WebServerStarted(usrv, ssrv);
+}
+
+WebServer::~WebServer() {
+#ifdef USE_HTTPS_SERVER
+  StopSSLServer();
+#endif
+  StopRegularServer();
+}
+
+/*
+ * Note : need to run FreeCerts() after this
+ */
+void WebServer::ConfigureSSLServer() {
 #ifdef	USE_HTTPS_SERVER
-  const unsigned char *cert_key = 0, *cert = 0;
   int len;
-  httpd_ssl_config_t	scfg = HTTPD_SSL_CONFIG_DEFAULT();
-  bool	start_secure = true;
+  scfg = HTTPD_SSL_CONFIG_DEFAULT();
+  start_secure = true;
 
   scfg.port_secure = config->getWebServerSecure();
-  scfg.port_insecure = config->getWebServerPort();
   // scfg.httpd.verify_mode = SSL_VERIFY_PEER;
   // scfg.httpd.global_user_ctx.verify_mode = SSL_VERIFY_PEER;
   // ESP_LOGE(webserver_tag, "%s: GUctx %p", __FUNCTION__, scfg.httpd.global_user_ctx);
@@ -96,19 +132,18 @@ void WebServer::Start() {
     start_secure = false;
   }
 
-  cert_key = ReadFile(config->acmeCertKeyFilename(), &len);
+  cert_key = (unsigned char *)ReadFile(config->acmeCertKeyFilename(), &len);
   if (cert_key == 0)
     start_secure = false;
   scfg.prvtkey_pem = cert_key;
   scfg.prvtkey_len = len;
 
-  cert = ReadFile(config->acmeCertificateFilename(), &len);
+  cert = (unsigned char *)ReadFile(config->acmeCertificateFilename(), &len);
   if (cert == 0)
     start_secure = false;
   scfg.cacert_pem = cert;
   scfg.cacert_len = len;
-
-# else	/* No ACME */
+# else /* No ACME */
   extern const unsigned char cacert_pem_start[] asm("_binary_cacert_pem_start");
   extern const unsigned char cacert_pem_end[]   asm("_binary_cacert_pem_end");
   extern const unsigned char prvtkey_pem_start[] asm("_binary_prvtkey_pem_start");
@@ -118,12 +153,25 @@ void WebServer::Start() {
   scfg.cacert_len = cacert_pem_end - cacert_pem_start;
   scfg.prvtkey_pem = prvtkey_pem_start;
   scfg.prvtkey_len = prvtkey_pem_end - prvtkey_pem_start;
-# endif	/* No ACME */
+# endif	/* ACME */
+#endif
+}
 
-  /*
-   * Create SSL web server
-   */
-  ESP_LOGD(webserver_tag, "Starting SSL web server ...");
+void WebServer::FreeCerts() {
+# ifdef USE_ACME
+  if (cert != 0) free((void *)cert);
+  if (cert_key != 0) free((void *)cert_key);
+  scfg.cacert_pem = cert = 0;
+  scfg.prvtkey_pem = cert_key = 0;
+# endif
+}
+
+void WebServer::StartSSLServer() {
+#ifdef USE_HTTPS_SERVER
+  esp_err_t		err = ESP_FAIL;
+
+  ESP_LOGI(webserver_tag, "Starting SSL web server ...");
+  ssrv = 0;
   if (start_secure && (scfg.port_secure != (uint16_t)-1)) {
     if ((err = httpd_ssl_start(&ssrv, &scfg)) != ESP_OK) {
       ESP_LOGE(webserver_tag, "Failed to start SSL webserver(%d)", scfg.port_secure);
@@ -133,88 +181,46 @@ void WebServer::Start() {
   } else {
     ESP_LOGI(webserver_tag, "Not starting SSL webserver");
   }
+#endif
+}
 
-# ifdef USE_ACME
-    if (cert != 0) free((void *)cert);
-    if (cert_key != 0) free((void *)cert_key);
-    scfg.cacert_pem = cert = 0;
-    scfg.prvtkey_pem = cert_key = 0;
-# endif
-#endif	/* HTTPS server */
+void WebServer::StopSSLServer() {
+#ifdef USE_HTTPS_SERVER
+  if (ssrv) {
+    httpd_ssl_stop(ssrv);
+    ssrv = 0;
+  }
+#endif
+}
 
-  /*
-   * Create regular web server
-   */
-  ESP_LOGD(webserver_tag, "Starting regular web server ...");
-
-  httpd_config_t	cfg = HTTPD_DEFAULT_CONFIG();
+void WebServer::ConfigureRegularServer() {
+  cfg = HTTPD_DEFAULT_CONFIG();
   cfg.server_port = config->getWebServerPort();
   cfg.ctrl_port = 32769;	// HACK, original one (ssl server) is on 32768
+}
+
+void WebServer::StartRegularServer() {
+  esp_err_t		err = ESP_FAIL;
+
+  ESP_LOGD(webserver_tag, "Starting regular web server ...");
 
   if ((err = httpd_start(&usrv, &cfg)) != ESP_OK) {
     ESP_LOGE(webserver_tag, "failed to start %s (%d)", esp_err_to_name(err), err);
   } else {
     ESP_LOGI(webserver_tag, "Start webserver(%d)", cfg.server_port);
   }
-
-#if 0
-  // Handle the default query, this is "/", not "/index.html".
-  httpd_uri_t uri_hdl_def = {
-    "/",			// URI handled
-    HTTP_GET,			// HTTP method
-    index_handler,		// Handler
-    (void *)0			// User context
-  };
-  if (httpd_register_uri_handler(usrv, &uri_hdl_def) != ESP_OK)
-    ESP_LOGE(webserver_tag, "%s: failed to register %s %s handler", __FUNCTION__, uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
-#endif
-
-#ifndef	USE_HTTPS_SERVER
-# if defined(IDF_VER) && (IDF_MAJOR_VERSION > 3 || IDF_MINOR_VERSION > 2)
-  // Only available in esp-idf 3.3 and up
-  cfg.uri_match_fn = httpd_uri_match_wildcard;
-# endif
-#else
-  // No wildcard handling in the ESP https server
-#endif
-
-#if 0
-  uri_hdl_def.uri = "/*";
-  uri_hdl_def.handler = wildcard_handler;
-  if (httpd_register_uri_handler(usrv, &uri_hdl_def) != ESP_OK)
-    ESP_LOGE(webserver_tag, "%s: failed to register %s %s handler", __FUNCTION__, uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
-#endif
-
-  // Handler for arming from a browser
-  httpd_uri_t uri_hdl_def;
-  uri_hdl_def.uri = "/alarm";
-  uri_hdl_def.method = HTTP_GET;
-  uri_hdl_def.user_ctx = 0;
-  uri_hdl_def.handler = alarm_handler;
-  if (httpd_register_uri_handler(ssrv, &uri_hdl_def) != ESP_OK)
-    ESP_LOGE(webserver_tag, "%s: failed to register %s %s handler", __FUNCTION__, uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
-
-  network->WebServerStarted(usrv, ssrv);
 }
 
-WebServer::~WebServer() {
-#ifdef USE_HTTPS_SERVER
-  httpd_ssl_stop(ssrv);
-#endif
-  httpd_stop(usrv);
+void WebServer::StopRegularServer() {
+  if (usrv) {
+    httpd_stop(usrv);
+    usrv = 0;
+  }
 }
 
 /*
  * URI Handlers
  */
-
-/*
- * Generic handler
- * No conditional compilation here but only called if esp-idf version is right
- */
-esp_err_t WebServer::wildcard_handler(httpd_req_t *req) {
-  return ESP_OK;
-}
 
 /*
  * Handler for requests to change the alarm armed state
@@ -376,38 +382,6 @@ void WebServer::SendPage(httpd_req_t *req) {
 }
 
 /*
- * This gets the standard initial request, just http://this-node
- */
-#if 0
-esp_err_t index_handler(httpd_req_t *req) {
-  // Check whether this socket is secure.
-  int sock = httpd_req_to_sockfd(req);
-
-  if (! security->isPeerSecure(sock)) {
-    const char *reply = "<!DOCTYPE html><html><head><title>Not authorized</title></head><body>Error: not authorized</body></html>";
-    httpd_resp_send(req, reply, strlen(reply));
-    
-    struct sockaddr_in6 sa6;
-    socklen_t salen = sizeof(sa6);
-    if (getpeername(sock, (sockaddr *)&sa6, &salen) == 0) {
-      struct sockaddr_in sa;
-      sa.sin_addr.s_addr = sa6.sin6_addr.un.u32_addr[3];
-      ESP_LOGE(_ws->webserver_tag, "%s: access attempt for %s from %s, not allowed",
-        __FUNCTION__, req->uri, inet_ntoa(sa.sin_addr));
-    } else {
-      ESP_LOGE(_ws->webserver_tag, "%s: access attempt for %s, not allowed", __FUNCTION__, req->uri);
-    }
-
-    httpd_resp_set_status(req, "401 Not authorized");
-    return ESP_OK;
-  }
-
-  _ws->SendPage(req);
-  return ESP_OK;
-}
-#endif
-
-/*
  * Expose the server handle so we can pass it to the ACME library
  */
 httpd_handle_t WebServer::getRegularServer() {
@@ -435,6 +409,13 @@ esp_err_t WebServer::WsNetworkDisconnected(void *ctx, system_event_t *event) {
     httpd_stop(_ws->getSSLServer());
   return ESP_OK;
 }
+
+void WebServer::CertificateUpdate() {
+  ESP_LOGI(_ws->webserver_tag, "%s", __FUNCTION__);
+
+  _ws->StopSSLServer();
+  _ws->StartSSLServer();
+}
 #endif	/* USE_HTTP_SERVER */
 
 #ifdef USE_ACME
@@ -459,6 +440,7 @@ const unsigned char *WebServer::ReadFile(const char *fn, int *plen) {
     if (plen != 0) *plen = 0;
     return 0;
   }
+  ESP_LOGD(webserver_tag, "%s(%s)", __FUNCTION__, ffn);
   long len = fseek(f, 0L, SEEK_END);
   (void)fseek(f, 0L, SEEK_SET);
   if (len == 0)
@@ -476,7 +458,7 @@ const unsigned char *WebServer::ReadFile(const char *fn, int *plen) {
     // ESP_LOGD(webserver_tag, "Reading -> %d bytes, total %d ", inc, total);
   }
   fclose(f);
-  ESP_LOGI(webserver_tag, "Read from %s, len %d", ffn, total);
+  ESP_LOGI(webserver_tag, "%s: read from %s, len %d", __FUNCTION__, ffn, total);
 
   buffer[len] = 0;
   if (plen != 0) *plen = len;

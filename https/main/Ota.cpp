@@ -57,7 +57,7 @@ Ota::Ota() {
 Ota::Ota(bool start) {
   server = 0;
   supplied_server = true;
-  network->RegisterModule(ota_tag, OtaNetworkConnected, OtaNetworkDisconnected, 0, OtaWsStarted);
+  network->RegisterModule(ota_tag, OtaNetworkConnected, OtaNetworkDisconnected, 0, OtaWsStarted, NULL);
 }
 
 static const char *http_method2string(int m) {
@@ -94,8 +94,13 @@ Ota::~Ota() {
 
 void OtaWsStarted(httpd_handle_t uws, httpd_handle_t sws) {
   ESP_LOGD("ota", "%s", __FUNCTION__);
-  ota->server = uws;
-  ota->Start();
+
+  if (uws == 0) {
+    ESP_LOGE(ota_tag, "%s: no regular web server, not starting", __FUNCTION__);
+  } else {
+    ota->server = uws;
+    ota->Start();
+  }
 }
 
 static char *memmem(char *haystack, int hsl, char *needle, int nl) {
