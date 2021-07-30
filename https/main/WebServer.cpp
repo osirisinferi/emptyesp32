@@ -412,16 +412,8 @@ esp_err_t WebServer::WsNetworkDisconnected(void *ctx, system_event_t *event) {
  * Static function (we register this as a handler), so use fields via pointer
  */
 void WebServer::CertificateUpdate() {
-  ESP_LOGI(_ws->webserver_tag, "%s", __FUNCTION__);
-  TaskHandle_t t = xTaskGetCurrentTaskHandle();
-  ESP_LOGI(_ws->webserver_tag, "Task handle %p", t ? t : "(null)");
-#if 0
-  if (t) {
-    ESP_LOGI(_ws->webserver_tag, "Task %s", pcTaskGetName(t));
-  }
-#endif
-
   _ws->start_secure = true;
+
   // Server certificate
   if (acme == 0 || acme->getCertificate() == 0) {
     ESP_LOGE(_ws->webserver_tag, "No server certificate");
