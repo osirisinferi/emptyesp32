@@ -64,6 +64,7 @@ void App::setup(void) {
   esp_log_level_set("efuse", ESP_LOG_ERROR);
   esp_log_level_set("httpd_parse", ESP_LOG_DEBUG);
   esp_log_level_set("esp_http_client", ESP_LOG_DEBUG);
+  esp_log_level_set("esp_littlefs", ESP_LOG_ERROR);
 
   /* ESP-IDF 4.x */
   esp_log_level_set("esp_netif_handlers", ESP_LOG_ERROR);
@@ -302,6 +303,24 @@ void App::setup(void) {
 #warning "Note: cannot have OTA without webserver"
 #endif
 
+#if 0
+  /*
+   * List of tasks
+   * Wrote a private version as indicated in the docs.
+   */
+  int nt = uxTaskGetNumberOfTasks();
+  TaskStatus_t *tl = (TaskStatus_t *)calloc(nt, sizeof(TaskStatus_t));
+  if (tl) {
+    uint32_t ulTotalRunTime;
+    int tn = uxTaskGetSystemState(tl, nt, &ulTotalRunTime);
+    for (int i=0; i<tn; i++) {
+      ESP_LOGI(app_tag, "Task %02d %p %20s %5d", i, tl[i].xHandle, tl[i].pcTaskName, tl[i].usStackHighWaterMark);
+    }
+  }
+
+  free((void *)tl);
+#endif
+
   network->WaitForWifi();
 }
 
@@ -400,7 +419,9 @@ void App::loop() {
 
     // ACME
     if (acme) {
-      acme->loop(nowts);
+      bool upd = acme->loop(nowts);
+      if (upd)
+        network->CertificateUpdated();
     }
   }
 #endif

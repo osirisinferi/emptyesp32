@@ -92,8 +92,13 @@ void WebServer::Start() {
   uri_hdl_def.method = HTTP_GET;
   uri_hdl_def.user_ctx = 0;
   uri_hdl_def.handler = alarm_handler;
+
   if (httpd_register_uri_handler(ssrv, &uri_hdl_def) != ESP_OK)
-    ESP_LOGE(webserver_tag, "%s: failed to register %s %s handler", __FUNCTION__, uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
+    ESP_LOGE(webserver_tag, "%s: failed to register %s %s handler", __FUNCTION__, uri_hdl_def.uri,
+      http_method2string(uri_hdl_def.method));
+  else
+    ESP_LOGI(webserver_tag, "%s: registered %s %s handler for HTTPS", __FUNCTION__,
+      uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
 
   network->WebServerStarted(usrv, ssrv);
 }
@@ -110,7 +115,6 @@ WebServer::~WebServer() {
  */
 void WebServer::ConfigureSSLServer() {
 #ifdef	USE_HTTPS_SERVER
-  int len;
   scfg = HTTPD_SSL_CONFIG_DEFAULT();
   start_secure = true;
 
@@ -119,31 +123,7 @@ void WebServer::ConfigureSSLServer() {
   // scfg.httpd.global_user_ctx.verify_mode = SSL_VERIFY_PEER;
   // ESP_LOGE(webserver_tag, "%s: GUctx %p", __FUNCTION__, scfg.httpd.global_user_ctx);
 
-# ifdef USE_ACME
-  // Server certificate
-  if (acme == 0 || acme->getCertificate() == 0) {
-    ESP_LOGE(webserver_tag, "No server certificate");
-    start_secure = false;
-  }
-
-  // Server private key
-  if (acme == 0 || acme->getCertificateKey() == 0) {
-    ESP_LOGE(webserver_tag, "No server private key");
-    start_secure = false;
-  }
-
-  cert_key = (unsigned char *)ReadFile(config->acmeCertKeyFilename(), &len);
-  if (cert_key == 0)
-    start_secure = false;
-  scfg.prvtkey_pem = cert_key;
-  scfg.prvtkey_len = len;
-
-  cert = (unsigned char *)ReadFile(config->acmeCertificateFilename(), &len);
-  if (cert == 0)
-    start_secure = false;
-  scfg.cacert_pem = cert;
-  scfg.cacert_len = len;
-# else /* No ACME */
+# ifndef USE_ACME
   extern const unsigned char cacert_pem_start[] asm("_binary_cacert_pem_start");
   extern const unsigned char cacert_pem_end[]   asm("_binary_cacert_pem_end");
   extern const unsigned char prvtkey_pem_start[] asm("_binary_prvtkey_pem_start");
@@ -169,17 +149,35 @@ void WebServer::FreeCerts() {
 void WebServer::StartSSLServer() {
 #ifdef USE_HTTPS_SERVER
   esp_err_t		err = ESP_FAIL;
+  int			len;
 
-  ESP_LOGI(webserver_tag, "Starting SSL web server ...");
+  if (cert_key)
+    free((void *)cert_key);
+  cert_key = (unsigned char *)ReadFile(config->acmeCertKeyFilename(), &len);
+  if (cert_key == 0)
+    start_secure = false;
+  scfg.prvtkey_pem = cert_key;
+  scfg.prvtkey_len = cert_key ? strlen((char *)cert_key) + 1 : 0;
+
+  if (cert)
+    free((void *)cert);
+  cert = (unsigned char *)ReadFile(config->acmeCertificateFilename(), &len);
+  if (cert == 0)
+    start_secure = false;
+  scfg.cacert_pem = cert;
+  scfg.cacert_len = cert ? strlen((char *)cert) + 1 : 0;
+
   ssrv = 0;
   if (start_secure && (scfg.port_secure != (uint16_t)-1)) {
+    ESP_LOGD(webserver_tag, "Starting SSL web server ...");
     if ((err = httpd_ssl_start(&ssrv, &scfg)) != ESP_OK) {
       ESP_LOGE(webserver_tag, "Failed to start SSL webserver(%d)", scfg.port_secure);
     } else {
       ESP_LOGI(webserver_tag, "Start SSL webserver (%d)", scfg.port_secure);
     }
   } else {
-    ESP_LOGI(webserver_tag, "Not starting SSL webserver");
+    ESP_LOGI(webserver_tag, "Not starting SSL webserver: start_secure %s, port %d",
+      start_secure ? "true" : "false", scfg.port_secure);
   }
 #endif
 }
@@ -410,8 +408,31 @@ esp_err_t WebServer::WsNetworkDisconnected(void *ctx, system_event_t *event) {
   return ESP_OK;
 }
 
+/*
+ * Static function (we register this as a handler), so use fields via pointer
+ */
 void WebServer::CertificateUpdate() {
   ESP_LOGI(_ws->webserver_tag, "%s", __FUNCTION__);
+  TaskHandle_t t = xTaskGetCurrentTaskHandle();
+  ESP_LOGI(_ws->webserver_tag, "Task handle %p", t ? t : "(null)");
+#if 0
+  if (t) {
+    ESP_LOGI(_ws->webserver_tag, "Task %s", pcTaskGetName(t));
+  }
+#endif
+
+  _ws->start_secure = true;
+  // Server certificate
+  if (acme == 0 || acme->getCertificate() == 0) {
+    ESP_LOGE(_ws->webserver_tag, "No server certificate");
+    _ws->start_secure = false;
+  }
+
+  // Server private key
+  if (acme == 0 || acme->getCertificateKey() == 0) {
+    ESP_LOGE(_ws->webserver_tag, "No server private key");
+    _ws->start_secure = false;
+  }
 
   _ws->StopSSLServer();
   _ws->StartSSLServer();

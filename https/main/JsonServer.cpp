@@ -114,7 +114,7 @@ esp_err_t JsonServer::json_handler(httpd_req_t *req) {
   // Process the query - currently still a dummy
 
   // Parameters to the query -- not used here
-#if 0
+#if 1
   int	buflen;
   char	*buf;
 

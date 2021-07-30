@@ -130,6 +130,7 @@ public:
     void CertificateUpdate());
 
   void WebServerStarted(httpd_handle_t uws, httpd_handle_t sws);
+  void CertificateUpdated();
 
 private:
   const char		*network_tag = "Network";

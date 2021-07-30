@@ -407,7 +407,7 @@ void ip_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, 
 
     for (mp = network->modules.begin(); mp != network->modules.end(); mp++) {
       if (mp->NetworkConnected != 0) {
-	ESP_LOGI(snetwork_tag, "Network Connected : call module %s", mp->module);
+	ESP_LOGD(snetwork_tag, "Network Connected : call module %s", mp->module);
 
 	// FIX ME how to treat result
 	mp->result = mp->NetworkConnected(ctx, (system_event_t *)event_data);
@@ -681,6 +681,24 @@ void Network::WebServerStarted(httpd_handle_t uws, httpd_handle_t sws) {
       ESP_LOGD(snetwork_tag, "WebServerStarted : call module %s", mp->module);
 
       mp->NewWebServer(uws, sws);
+    }
+  }
+}
+
+/*
+ * Call this on Certificate update
+ */
+void Network::CertificateUpdated() {
+  ESP_LOGD(snetwork_tag, "%s", __FUNCTION__);
+
+  list<module_registration>::iterator mp;
+  ESP_LOGD(snetwork_tag, "%s : %d modules", __FUNCTION__, modules.size());
+
+  for (mp = modules.begin(); mp != modules.end(); mp++) {
+    if (mp->CertificateUpdate != 0) {
+      ESP_LOGD(snetwork_tag, "%s : call module %s", __FUNCTION__, mp->module);
+
+      mp->CertificateUpdate();
     }
   }
 }

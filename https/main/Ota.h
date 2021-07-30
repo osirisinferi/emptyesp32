@@ -1,7 +1,7 @@
 /*
  * This module implements a small web server, for OTA
  *
- * Copyright (c) 2019, 2020 Danny Backx
+ * Copyright (c) 2019, 2020, 2021 Danny Backx
  *
  * License (GNU Lesser General Public License) :
  *
@@ -37,7 +37,6 @@ class Ota {
 
   private:
     const char *ota_tag = "Ota";
-    void Start();
 
     bool		supplied_server;	// Don't start your own server
     httpd_handle_t	server;

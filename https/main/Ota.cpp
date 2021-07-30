@@ -69,24 +69,6 @@ static const char *http_method2string(int m) {
   }
 }
 
-void Ota::Start() {
-  httpd_uri_t uri_hdl_def = { "/update", HTTP_POST, ota_update_handler, 0};
-  if (httpd_register_uri_handler(server, &uri_hdl_def) != ESP_OK)
-    ESP_LOGE(ota_tag, "%s: failed to register %s %s handler", __FUNCTION__, uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
-
-  // Handle the default query, this is "/", not "/index.html".
-  uri_hdl_def.uri = "/";
-  uri_hdl_def.method = HTTP_GET;
-  uri_hdl_def.handler = ota_index_handler;
-  if (httpd_register_uri_handler(server, &uri_hdl_def) != ESP_OK)
-    ESP_LOGE(ota_tag, "%s: failed to register %s %s handler", __FUNCTION__, uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
-
-  uri_hdl_def.uri = "/serverIndex";
-  uri_hdl_def.handler = serverIndex_handler;
-  if (httpd_register_uri_handler(server, &uri_hdl_def) != ESP_OK)
-    ESP_LOGE(ota_tag, "%s: failed to register %s %s handler", __FUNCTION__, uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
-}
-
 Ota::~Ota() {
   if (server && !supplied_server)
     httpd_stop(server);
@@ -97,10 +79,33 @@ void OtaWsStarted(httpd_handle_t uws, httpd_handle_t sws) {
 
   if (uws == 0) {
     ESP_LOGE(ota_tag, "%s: no regular web server, not starting", __FUNCTION__);
-  } else {
-    ota->server = uws;
-    ota->Start();
+    return;
   }
+
+  ota->server = uws;
+
+  httpd_uri_t uri_hdl_def = { "/update", HTTP_POST, ota_update_handler, 0};
+
+  if (httpd_register_uri_handler(uws, &uri_hdl_def) != ESP_OK)
+    ESP_LOGE(ota_tag, "failed to register %s %s handler", uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
+  else
+    ESP_LOGI(ota_tag, "registered %s %s handler for HTTP", uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
+
+  // Handle the default query, this is "/", not "/index.html".
+  uri_hdl_def.uri = "/";
+  uri_hdl_def.method = HTTP_GET;
+  uri_hdl_def.handler = ota_index_handler;
+  if (httpd_register_uri_handler(uws, &uri_hdl_def) != ESP_OK)
+    ESP_LOGE(ota_tag, "failed to register %s %s handler", uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
+  else
+    ESP_LOGI(ota_tag, "registered %s %s handler for HTTP", uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
+
+  uri_hdl_def.uri = "/serverIndex";
+  uri_hdl_def.handler = serverIndex_handler;
+  if (httpd_register_uri_handler(uws, &uri_hdl_def) != ESP_OK)
+    ESP_LOGE(ota_tag, "failed to register %s %s handler", uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
+  else
+    ESP_LOGI(ota_tag, "registered %s %s handler for HTTP", uri_hdl_def.uri, http_method2string(uri_hdl_def.method));
 }
 
 static char *memmem(char *haystack, int hsl, char *needle, int nl) {

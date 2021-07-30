@@ -186,9 +186,9 @@ void Secure::AddDevice(const char *mac) {
 
 void Secure::AddDevice(const char *mac, bool ota) {
   if (ota) 
-    ESP_LOGI(secure_tag, "Add Device (%s, ota)", mac);
+    ESP_LOGD(secure_tag, "Add Device (%s, ota)", mac);
   else
-    ESP_LOGI(secure_tag, "Add Device (%s)", mac);
+    ESP_LOGD(secure_tag, "Add Device (%s)", mac);
 
   if (ndevices == tbl_max) {
     tbl_max += tbl_inc;
@@ -218,9 +218,9 @@ void Secure::AddDevice(in_addr_t ip) {
 
 void Secure::AddDevice(in_addr_t ip, bool ota) {
   if (ota)
-    ESP_LOGI(secure_tag, "Add Device %s (ota)", inet_ntoa(ip));
+    ESP_LOGD(secure_tag, "Add Device %s (ota)", inet_ntoa(ip));
   else
-    ESP_LOGI(secure_tag, "Add Device %s", inet_ntoa(ip));
+    ESP_LOGD(secure_tag, "Add Device %s", inet_ntoa(ip));
 
   if (ndevices == tbl_max) {
     tbl_max += tbl_inc;
