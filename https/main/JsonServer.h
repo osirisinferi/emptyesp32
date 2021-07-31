@@ -42,8 +42,11 @@ class JsonServer {
 
     static esp_err_t json_handler(httpd_req_t *req);
     static void NewWebServer(httpd_handle_t, httpd_handle_t);
+    static void CertificateUpdate();
 
     bool isConnectionAllowed(httpd_req_t *req);
+    void RegisterHttpsServices();
+    void RegisterHttpServices();
 };
 
 extern JsonServer *jsonsrv;

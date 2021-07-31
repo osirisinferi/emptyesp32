@@ -29,7 +29,7 @@
 #include "App.h"
 
 JsonServer::JsonServer() {
-  network->RegisterModule(jsonserver_tag, NULL, NULL, NULL, NewWebServer, NULL);
+  network->RegisterModule(jsonserver_tag, NULL, NULL, NULL, NewWebServer, CertificateUpdate);
 
   usrv = ssrv = 0;
 }
@@ -46,14 +46,36 @@ static const char *http_method2string(int m) {
   }
 }
 
-void JsonServer::NewWebServer(httpd_handle_t usrv, httpd_handle_t ssrv) {
+void JsonServer::RegisterHttpServices() {
   httpd_uri_t uri_hdl_def = {
     jsonsrv->json_path,		// URI handled
     HTTP_PUT,			// HTTP method
     jsonsrv->json_handler,	// Handler
     (void *)0			// User context
   };
-#if 1
+
+  if (usrv) {
+    uri_hdl_def.method = HTTP_PUT;
+    if (httpd_register_uri_handler(usrv, &uri_hdl_def) != ESP_OK) {
+      ESP_LOGE(jsonsrv->jsonserver_tag, "Failed to register %s %s for HTTP server", jsonsrv->json_path, http_method2string(uri_hdl_def.method));
+    } else
+      ESP_LOGI(jsonsrv->jsonserver_tag, "registered %s %s for HTTP server", jsonsrv->json_path, http_method2string(uri_hdl_def.method));
+    uri_hdl_def.method = HTTP_GET;
+    if (httpd_register_uri_handler(usrv, &uri_hdl_def) != ESP_OK) {
+      ESP_LOGE(jsonsrv->jsonserver_tag, "Failed to register %s %s for HTTP server", jsonsrv->json_path, http_method2string(uri_hdl_def.method));
+    } else
+      ESP_LOGI(jsonsrv->jsonserver_tag, "registered %s %s for HTTP server", jsonsrv->json_path, http_method2string(uri_hdl_def.method));
+  }
+}
+
+void JsonServer::RegisterHttpsServices() {
+  httpd_uri_t uri_hdl_def = {
+    jsonsrv->json_path,		// URI handled
+    HTTP_PUT,			// HTTP method
+    jsonsrv->json_handler,	// Handler
+    (void *)0			// User context
+  };
+
   if (ssrv) {
     uri_hdl_def.method = HTTP_PUT;
     if (httpd_register_uri_handler(ssrv, &uri_hdl_def) != ESP_OK) {
@@ -67,25 +89,14 @@ void JsonServer::NewWebServer(httpd_handle_t usrv, httpd_handle_t ssrv) {
     } else
       ESP_LOGI(jsonsrv->jsonserver_tag, "registered %s %s for HTTPS server", jsonsrv->json_path, http_method2string(uri_hdl_def.method));
   }
-#endif
+}
 
-#if 1
-  if (usrv) {
-    uri_hdl_def.method = HTTP_PUT;
-    if (httpd_register_uri_handler(usrv, &uri_hdl_def) != ESP_OK) {
-      ESP_LOGE(jsonsrv->jsonserver_tag, "Failed to register %s %s for HTTP server", jsonsrv->json_path, http_method2string(uri_hdl_def.method));
-    } else
-      ESP_LOGI(jsonsrv->jsonserver_tag, "registered %s %s for HTTP server", jsonsrv->json_path, http_method2string(uri_hdl_def.method));
-    uri_hdl_def.method = HTTP_GET;
-    if (httpd_register_uri_handler(usrv, &uri_hdl_def) != ESP_OK) {
-      ESP_LOGE(jsonsrv->jsonserver_tag, "Failed to register %s %s for HTTP server", jsonsrv->json_path, http_method2string(uri_hdl_def.method));
-    } else
-      ESP_LOGI(jsonsrv->jsonserver_tag, "registered %s %s for HTTP server", jsonsrv->json_path, http_method2string(uri_hdl_def.method));
-  }
-#endif
-
+void JsonServer::NewWebServer(httpd_handle_t usrv, httpd_handle_t ssrv) {
   jsonsrv->usrv = usrv;
   jsonsrv->ssrv = ssrv;
+
+  jsonsrv->RegisterHttpsServices();
+  jsonsrv->RegisterHttpServices();
 }
 
 /*
@@ -266,4 +277,17 @@ bool JsonServer::isConnectionAllowed(httpd_req_t *req) {
   }
 
   return ESP_OK;
+}
+
+void JsonServer::CertificateUpdate() {
+  ESP_LOGI(jsonsrv->jsonserver_tag, "%s", __FUNCTION__);
+
+  if (jsonsrv->ssrv == 0) {
+    // We didn't have a certificate at startup, but we might have one now.
+    if (_ws->getSSLServer()) {
+      jsonsrv->ssrv = _ws->getSSLServer();
+
+      jsonsrv->RegisterHttpsServices();
+    }
+  }
 }
