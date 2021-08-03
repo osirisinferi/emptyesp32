@@ -157,7 +157,7 @@ void WebServer::StartSSLServer() {
   if (cert_key == 0)
     start_secure = false;
   scfg.prvtkey_pem = cert_key;
-  scfg.prvtkey_len = cert_key ? strlen((char *)cert_key) + 1 : 0;
+  scfg.prvtkey_len = cert_key ? len + 1 : 0;
 
   if (cert)
     free((void *)cert);
@@ -165,7 +165,7 @@ void WebServer::StartSSLServer() {
   if (cert == 0)
     start_secure = false;
   scfg.cacert_pem = cert;
-  scfg.cacert_len = cert ? strlen((char *)cert) + 1 : 0;
+  scfg.cacert_len = cert ? len + 1 : 0;
 
   ssrv = 0;
   if (start_secure && (scfg.port_secure != (uint16_t)-1)) {
@@ -473,8 +473,8 @@ const unsigned char *WebServer::ReadFile(const char *fn, int *plen) {
   fclose(f);
   ESP_LOGI(webserver_tag, "%s: read from %s, len %d", __FUNCTION__, ffn, total);
 
-  buffer[len] = 0;
-  if (plen != 0) *plen = len;
+  buffer[total] = 0;
+  if (plen != 0) *plen = total;
   return (const unsigned char *)buffer;
 }
 #endif
