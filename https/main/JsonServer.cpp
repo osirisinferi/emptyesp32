@@ -262,7 +262,6 @@ bool JsonServer::isConnectionAllowed(httpd_req_t *req) {
     }
   }
   }
-#endif
 
   return ESP_OK;
 }
