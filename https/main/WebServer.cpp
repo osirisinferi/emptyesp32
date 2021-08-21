@@ -119,6 +119,11 @@ void WebServer::ConfigureSSLServer() {
   start_secure = true;
 
   scfg.port_secure = config->getWebServerSecure();
+  scfg.httpd.stack_size = 2 * 8192;
+
+  // scfg.verify_mode = MBEDTLS_SSL_VERIFY_REQUIRED;
+  // scfg.httpd.verify_mode = MBEDTLS_SSL_VERIFY_REQUIRED;
+  // scfg.httpd.global_user_ctx.verify_mode = MBEDTLS_SSL_VERIFY_REQUIRED;
   // scfg.httpd.verify_mode = SSL_VERIFY_PEER;
   // scfg.httpd.global_user_ctx.verify_mode = SSL_VERIFY_PEER;
   // ESP_LOGE(webserver_tag, "%s: GUctx %p", __FUNCTION__, scfg.httpd.global_user_ctx);
@@ -166,6 +171,13 @@ void WebServer::StartSSLServer() {
     start_secure = false;
   scfg.cacert_pem = cert;
   scfg.cacert_len = cert ? len + 1 : 0;
+
+  /*
+   * See https_server:create_secure_context :
+   * cacert = CA which signs client cert, or client cert itself , which is mapped to client_verify_cert_pem
+   */
+  scfg.client_verify_cert_pem = scfg.cacert_pem;
+  scfg.client_verify_cert_len = scfg.cacert_len;
 
   ssrv = 0;
   if (start_secure && (scfg.port_secure != (uint16_t)-1)) {
