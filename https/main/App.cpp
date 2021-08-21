@@ -106,7 +106,7 @@ void App::setup(void) {
 
   // Get short MAC
   uint8_t	smac[20];
-  ESP_ERROR_CHECK(esp_wifi_get_mac(ESP_IF_WIFI_STA, smac));
+  ESP_ERROR_CHECK(esp_wifi_get_mac(WIFI_IF_STA, smac));
 
   // Translate into readable format
   char macs[24];

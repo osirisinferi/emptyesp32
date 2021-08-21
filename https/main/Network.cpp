@@ -520,7 +520,7 @@ void Network::WaitForWifi(void)
 	ESP_LOGE(network_tag, "Failed to set wifi mode to STA");		// FIXME
 	return;
       }
-      err = esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config);
+      err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
       if (err != ESP_OK) {
 	ESP_LOGE(network_tag, "Failed to set wifi config");		// FIXME
 	return;
@@ -588,7 +588,7 @@ void Network::WaitForWifi(void)
 	ESP_LOGE(network_tag, "Failed to set wifi mode to STA");		// FIXME
 	return;
       }
-      err = esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config);
+      err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
       if (err != ESP_OK) {
 	ESP_LOGE(network_tag, "Failed to set wifi config");		// FIXME
 	return;
