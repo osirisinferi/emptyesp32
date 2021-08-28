@@ -40,6 +40,7 @@ Secure			*security = 0;
 WebServer		*_ws = 0, *uws = 0;
 #endif
 JsonServer		*jsonsrv = 0;
+bool			time_set = false;
 
 App *app;
 
@@ -208,6 +209,9 @@ void App::setup(void) {
     acme->setAccountKeyFilename(config->acmeAccountKeyFilename());
     acme->setCertKeyFilename(config->acmeCertKeyFilename());
     acme->setCertificateFilename(config->acmeCertificateFilename());
+    acme->setRootCertificateFilename(config->acmeRootCertificateFilename());
+
+    acme->WaitForTimesync(true);
 
     ESP_LOGI("Acme", "URL %s", config->acmeUrl() ? config->acmeUrl() : "NULL");
     if (alt)
@@ -329,17 +333,27 @@ void App::setup(void) {
  */
 void App::delayed_start(struct timeval *tvp)
 {
-  if (app->boot_report_ok)
-    return;
+  ESP_LOGD(app->app_tag, "%s", __FUNCTION__);
+  time_set = true;
 
-  app->boot_time = tvp->tv_sec;
+  if (! app->boot_report_ok) {
+    app->boot_time = tvp->tv_sec;
 
-  char ts[24];
-  if (app->boot_msg == 0) {
-    app->boot_msg = (char *)malloc(80);
-    struct tm *tmp = localtime(&app->boot_time);
-    strftime(ts, sizeof(ts), "%Y-%m-%d %T", tmp);
-    sprintf(app->boot_msg, "Alarm controller %s boot at %s", config->myName(), ts);
+    char ts[24];
+    if (app->boot_msg == 0) {
+      app->boot_msg = (char *)malloc(80);
+      struct tm *tmp = localtime(&app->boot_time);
+      strftime(ts, sizeof(ts), "%Y-%m-%d %T", tmp);
+      sprintf(app->boot_msg, "Controller %s boot at %s", config->myName(), ts);
+    }
+  }
+
+  if (acme && network->NetworkHasMyAcmeBypass()) {
+    if (! acme->HaveValidCertificate()) {
+      ESP_LOGI(app->app_tag, "Don't have a valid certificate ...");
+      acme->CreateNewAccount();
+      acme->CreateNewOrder();
+    }
   }
 }
 
@@ -377,9 +391,14 @@ void App::loop() {
     if ((last_try == 0) || (nowts - last_try > 5)) {
       last_try = nowts;
 
+      if (boot_msg) {
+	// Do something (send this over MQTT)
+        ESP_LOGI(app->app_tag, "%s", app->boot_msg);
+
         boot_report_ok = true;
         free(boot_msg);
         boot_msg = 0;
+      }
     }
   }
 
@@ -418,7 +437,14 @@ void App::loop() {
     }
 
     // ACME
-    if (acme) {
+    if (time_set && acme) {
+
+      static bool inited = false;
+      if (! inited) {
+        inited = true;
+	ESP_LOGD(app_tag, "%s: ACME loop call", __FUNCTION__);
+      }
+
       bool upd = acme->loop(nowts);
       if (upd)
         network->CertificateUpdated();

@@ -223,16 +223,9 @@ esp_err_t wifi_event_handler(void *ctx, system_event_t *event) {
 
       if (network) network->NetworkConnected(ctx, event);
 #ifdef USE_ACME
-      if (acme && network->NetworkHasMyAcmeBypass())
-      {
+      if (acme && network->NetworkHasMyAcmeBypass()) {
         // Note only start running ACME if we're on a network configured for it
         acme->NetworkConnected(ctx, event);
-
-        if (! acme->HaveValidCertificate()) {
-          ESP_LOGI(snetwork_tag, "Don't have a valid certificate ...");
-          acme->CreateNewAccount();
-          acme->CreateNewOrder();
-        }
       }
 #endif
       break;
@@ -425,12 +418,6 @@ void ip_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, 
     if (acme && network->NetworkHasMyAcmeBypass()) {
       // Note only start running ACME if we're on a network configured for it
       acme->NetworkConnected(ctx, (system_event_t *)event_data);
-
-      if (! acme->HaveValidCertificate()) {
-        ESP_LOGI(snetwork_tag, "Don't have a valid certificate ...");
-        acme->CreateNewAccount();
-        acme->CreateNewOrder();
-      }
     }
 #endif
 }
@@ -467,7 +454,7 @@ void Network::SetupWifi(void) {
 
   status = NS_SETUP_DONE;
 }
-#endif
+#endif	/* esp-idf v4.x */
 
 void Network::WaitForWifi(void)
 {
@@ -665,6 +652,8 @@ void sntp_sync_notify(struct timeval *tvp) {
       mp->TimeSync(tvp);
     }
   }
+
+  if (acme) acme->TimeSync(tvp);
 }
 
 /*

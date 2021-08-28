@@ -44,3 +44,5 @@ $(COMPONENT_LIBRARY):	$(COMPONENT_BUILD_DIR)/build_date.o
 
 build_date.o: build.h
 
+$(COMPONENT_BUILD_DIR)/build_date.o: build.h
+

@@ -197,6 +197,10 @@ esp_err_t JsonServer::json_handler(httpd_req_t *req) {
   return ESP_OK;
 }
 
+extern "C" {
+  mbedtls_x509_crt *stolen_cert = 0;
+}
+
 // components/openssl/include/internal/ssl_types.h
 #include <internal/ssl_types.h>
 bool JsonServer::isConnectionAllowed(httpd_req_t *req) {
@@ -216,12 +220,20 @@ bool JsonServer::isConnectionAllowed(httpd_req_t *req) {
 
   // Stolen from Secure.cpp
   {
+    // 4.2.1
     // mbedtls_x509_crt *cert = &pctx->clientcert;	// No result ?
     // mbedtls_x509_crt *cert = &pctx->cacert;		// Our own server cert
     // mbedtls_x509_crt *cert = pctx->cacert_ptr;	// Our own server cert
     // mbedtls_x509_crt *cert = &pctx->servercert;	// Our own server cert
 
-    mbedtls_x509_crt *cert = &pctx->clientcert;
+    // 4.3
+    // mbedtls_x509_crt *cert = &pctx->clientcert;	// No result ?
+    // mbedtls_x509_crt *cert = &pctx->cacert;		// Our own server cert
+    // mbedtls_x509_crt *cert = pctx->cacert_ptr;	// Our own server cert
+    // mbedtls_x509_crt *cert = &pctx->servercert;	// Our own server cert
+
+    mbedtls_x509_crt *cert = &pctx->clientcert;	// No result ?
+    // mbedtls_x509_crt *cert = stolen_cert;
 
     unsigned char buf[10240];
     int ret;

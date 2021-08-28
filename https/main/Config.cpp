@@ -30,71 +30,6 @@
 #undef B1000000
 #include <esp_littlefs.h>
 
-#if 0
-Config::Config(String mac) {
-  name = 0;
-
-  radio_pin = -1;
-  siren_pin = -1;
-  rgb_red_pin = rgb_green_pin = rgb_blue_pin = -1;
-  oled = false;
-  rfid = false;
-  rfidType = 0;
-  secure = false;
-  weather = false;
-  brightness_low = CONFIG_BRIGHTNESS_LOW;
-  brightness_high = CONFIG_BRIGHTNESS_HIGH;
-  oled_dc_pin = CONFIG_OLED_DC_PIN;
-  oled_cs_pin = CONFIG_OLED_CS_PIN;
-  webserver_port = webserver_secure = -1;
-  jsonserver_port = -1;
-#ifdef	USE_HARDCODED_CERT
-  trusted = (char *) CONFIG_TRUST_STORE_FN;
-  my_key = (char *) CONFIG_PRIVATE_KEY_FN;
-  my_cert = (char *) CONFIG_MY_CERT_FN;
-  check_local_certificates = true;
-#endif
-  ca_cert = (char *) CONFIG_ACME_FULLCHAIN_CERT_FN;
-  acme_account_key_fn = (char *) CONFIG_ACME_ACCOUNT_KEY_FN;
-  acme_cert_key_fn = (char *) CONFIG_ACME_CERT_KEY_FN;
-  acme_cert_fn = (char *) CONFIG_ACME_CERTIFICATE_FN;
-  run_acme = false;
-  acme_url = 0;
-  acme_alt_url = 0;
-  acme_server_url = (char *)ACME_DEFAULT_SERVER_URL;
-  acme_order_fn = (char *)  CONFIG_ACME_ORDER_FN;
-  acme_email_address = (char *)ACME_DEFAULT_EMAIL_ADDRESS;
-  acme_account_fn = (char *) CONFIG_ACME_ACCOUNT_FN;
-
-
-  run_ftp = true;		// Fallback if no configuration is read from anywhere
-  ftp_user = ftp_pass = 0;
-
-  update_timeout = 60;
-
-  tz = (char *)CONFIG_DEFAULT_TIMEZONE;
-
-  rfm69_slave_pin = rfm69_int_pin = rfm69_freq_band = rfm69_node_id = rfm69_network_id = -1;
-  rfm69_is_rfm69hw = false;
-  gtwt02 = false;
-
-  run_dyndns = false;
-  ddns_url = ddns_auth = ddns_server = ddns_provider = 0;
-
-  use_spiffs = false;
-  use_littlefs = true;
-
-  bme = mcp = -1;
-
-  includes = (char **)calloc(9, sizeof(char *));
-  for (int i=0; i<9; i++)
-    includes[i] = 0;
-
-  // This must be last
-  my_config.mac = strdup(mac.c_str());
-}
-#endif
-
 Config::Config(char *mac) {
   name = 0;
 
@@ -129,6 +64,7 @@ Config::Config(char *mac) {
   acme_email_address = (char *)ACME_DEFAULT_EMAIL_ADDRESS;
   acme_account_fn = (char *) CONFIG_ACME_ACCOUNT_FN;
   check_local_certificates = true;
+  acme_root_cert_fn = 0;
 
   run_ftp = true;		// Fallback if no configuration is read from anywhere
   ftp_user = ftp_pass = 0;
@@ -351,6 +287,7 @@ void Config::ParseConfig(JsonObject &jo) {
   ConfigString(jo, "acme_order_file_name", &acme_order_fn);
   ConfigString(jo, "acme_cert_fn", &acme_cert_fn);
   ConfigString(jo, "ca_cert", &ca_cert);
+  ConfigString(jo, "acme_root_cert_fn", &acme_root_cert_fn);
 #ifdef	USE_HARDCODED_CERT
   ConfigString(jo, "my_cert", &my_cert);
   ConfigString(jo, "my_key", &my_key);
@@ -594,6 +531,7 @@ char *Config::QueryConfig() {
   json["acme_account_file_name"] = acme_account_fn;
   json["acme_order_file_name"] = acme_order_fn;
   json["acme_cert_fn"] = acme_cert_fn;
+  json["acme_root_cert_fn"] = acme_root_cert_fn;
 
   if (acme_alt_url) {
     JsonArray &ja = json.createNestedArray("acme_urls");
@@ -932,6 +870,10 @@ int Config::haveBME280() {
 
 bool Config::haveTemperature() {
   return (bme >= 0 || mcp >= 0);
+}
+
+const char *Config::acmeRootCertificateFilename() {
+  return acme_root_cert_fn;
 }
 
 /*

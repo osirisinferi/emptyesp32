@@ -137,6 +137,7 @@ public:
   const char *acmeAccountFilename();
   const char *acmeOrderFilename();
   const char *acmeCertificateFilename();
+  const char *acmeRootCertificateFilename();
 
   // FTP server
   bool runFtp();
@@ -238,7 +239,8 @@ private:
   char *acme_server_url;
   char *acme_account_fn,
 	     *acme_order_fn,
-	     *acme_cert_fn;
+	     *acme_cert_fn,
+	     *acme_root_cert_fn;
 
   bool check_local_certificates;	// Check connection against certificates on local storage
 
