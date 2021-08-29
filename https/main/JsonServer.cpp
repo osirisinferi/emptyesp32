@@ -225,6 +225,13 @@ bool JsonServer::isConnectionAllowed(httpd_req_t *req) {
   {
     /*
      * Awaiting bugfix on esp-idf to make clientcert work.
+     *
+     * Note : add to esp-tls/esp_tls_mbedtls.c, near line 600, before the return at
+     * the end of esp_mbedtls_server_session_create() :
+     *   {
+     *     extern mbedtls_x509_crt *stolen_cert;
+     *     stolen_cert = mbedtls_ssl_get_peer_cert(&tls->ssl);
+     *   }
      */
     // mbedtls_x509_crt *cert = &pctx->clientcert;
     mbedtls_x509_crt *cert = stolen_cert;
