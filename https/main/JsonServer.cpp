@@ -197,6 +197,9 @@ esp_err_t JsonServer::json_handler(httpd_req_t *req) {
   return ESP_OK;
 }
 
+/*
+ * Awaiting bugfix on esp-idf to make clientcert work.
+ */
 extern "C" {
   mbedtls_x509_crt *stolen_cert = 0;
 }
@@ -220,20 +223,11 @@ bool JsonServer::isConnectionAllowed(httpd_req_t *req) {
 
   // Stolen from Secure.cpp
   {
-    // 4.2.1
-    // mbedtls_x509_crt *cert = &pctx->clientcert;	// No result ?
-    // mbedtls_x509_crt *cert = &pctx->cacert;		// Our own server cert
-    // mbedtls_x509_crt *cert = pctx->cacert_ptr;	// Our own server cert
-    // mbedtls_x509_crt *cert = &pctx->servercert;	// Our own server cert
-
-    // 4.3
-    // mbedtls_x509_crt *cert = &pctx->clientcert;	// No result ?
-    // mbedtls_x509_crt *cert = &pctx->cacert;		// Our own server cert
-    // mbedtls_x509_crt *cert = pctx->cacert_ptr;	// Our own server cert
-    // mbedtls_x509_crt *cert = &pctx->servercert;	// Our own server cert
-
-    mbedtls_x509_crt *cert = &pctx->clientcert;	// No result ?
-    // mbedtls_x509_crt *cert = stolen_cert;
+    /*
+     * Awaiting bugfix on esp-idf to make clientcert work.
+     */
+    // mbedtls_x509_crt *cert = &pctx->clientcert;
+    mbedtls_x509_crt *cert = stolen_cert;
 
     unsigned char buf[10240];
     int ret;
@@ -241,21 +235,9 @@ bool JsonServer::isConnectionAllowed(httpd_req_t *req) {
     // Get human-readable certificate info
     if ((ret = mbedtls_x509_crt_info((char *) buf, sizeof(buf) - 1, "", cert)) >= 0) {
       // Show it
-      ESP_LOGI(jsonserver_tag, "TLS client %s", buf);
+      ESP_LOGI(jsonserver_tag, "TLS client\n%s", buf);
     } else {
       ESP_LOGE(jsonserver_tag, "mbedtls_x509_crt_info -> %d", ret);
-    }
-
-    // Issuer ?
-    mbedtls_x509_name issuer = cert->issuer;
-    if (mbedtls_x509_dn_gets((char *)buf, sizeof(buf), &issuer) > 0) {
-      ESP_LOGI(jsonserver_tag, "TLS CA : %s", buf);
-    }
-
-    // Return OK if this is the CA (meaning it's not the client)
-    if (cert->ca_istrue == 1) {
-      ESP_LOGI(jsonserver_tag, "TLS this is a CA -> ok");
-      return 0;
     }
 
     // Subject (= calling node)
@@ -264,12 +246,15 @@ bool JsonServer::isConnectionAllowed(httpd_req_t *req) {
       ESP_LOGD(jsonserver_tag, "TLS Node : %s", buf);
 
       char *pcn = strstr((const char *)buf, "CN=");
-      if (pcn == 0)
-	ESP_LOGE(jsonserver_tag, "TLS Node not scanned");
+      char *pcn3 = pcn+3;
+
+      if (strcasestr(pcn3, "dannybackx.dns-cloud.net") != 0)
+	return ESP_OK;
+      else if (strcasestr(pcn3, "dannybackx.hopto.org") != 0)
+	return ESP_OK;
       else {
-	char *pcn3 = strdup(pcn+3);
-	ESP_LOGI(jsonserver_tag, "TLS CN : %s", pcn3);
-	// return MyTlsCNVerification(pcn3);
+	ESP_LOGE(jsonserver_tag, "TLS CN : %s, not authorized", pcn3);
+	return ESP_FAIL;
       }
     }
   }
