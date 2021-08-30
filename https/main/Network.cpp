@@ -113,28 +113,7 @@ struct mywifi {
 
 const char *snetwork_tag = "Network";
 
-#if (ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 0, 0))
-static const char *EventId2String(int eid) {
-  switch (eid) {
-  case SYSTEM_EVENT_STA_START:			return "START";
-  case SYSTEM_EVENT_STA_STOP:			return "STOP";
-  case SYSTEM_EVENT_GOT_IP6:			return "GOT_IP6";
-  case SYSTEM_EVENT_STA_DISCONNECTED:		return "DISCONNECTED";
-  case SYSTEM_EVENT_STA_CONNECTED:		return "CONNECTED";
-  case SYSTEM_EVENT_STA_AUTHMODE_CHANGE:	return "AUTHMODE_CHANGE";
-  case SYSTEM_EVENT_STA_GOT_IP:			return "GOT_IP";
-  case SYSTEM_EVENT_STA_LOST_IP:		return "LOST_IP";
-  case SYSTEM_EVENT_STA_WPS_ER_SUCCESS:		return "WPS_ER_SUCCESS";
-  case SYSTEM_EVENT_STA_WPS_ER_FAILED:		return "WPS_ER_FAILED";
-  case SYSTEM_EVENT_STA_WPS_ER_TIMEOUT:		return "WPS_ER_TIMEOUT";
-  case SYSTEM_EVENT_STA_WPS_ER_PIN:		return "WPS_ER_PIN";
-  case SYSTEM_EVENT_STA_WPS_ER_PBC_OVERLAP:	return "WPS_ER_PBC_OVERLAP";
-  default:					return "?";
-  }
-}
-#endif
-
-static const char *WifiReason2String(int r) {
+const char *Network::WifiReason2String(int r) {
   switch (r) {
   case WIFI_REASON_UNSPECIFIED:			return "UNSPECIFIED";
   case WIFI_REASON_AUTH_EXPIRE:			return "AUTH_EXPIRE";
@@ -173,174 +152,17 @@ static const char *WifiReason2String(int r) {
  * The ESP-IDF APIs have changed quite a bit between v3.x and v4 :-( so we have two versions
  * of some functions here. The event handler also has different parameters.
  */
-#if (ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 0, 0))
-/*
- * Old style : catch all events
- */
-esp_err_t wifi_event_handler(void *ctx, system_event_t *event) {
-  ESP_LOGE(snetwork_tag, "wifi_event_handler(%d,%s)", event->event_id, EventId2String(event->event_id));
 
-  switch (event->event_id) {
-    case SYSTEM_EVENT_STA_START:
-      esp_wifi_connect();
-      break;
-
-    case SYSTEM_EVENT_STA_CONNECTED:
-      ESP_LOGE(snetwork_tag, "STA_CONNECTED");
-      tcpip_adapter_create_ip6_linklocal(TCPIP_ADAPTER_IF_STA);
-      break;
-
-    case SYSTEM_EVENT_GOT_IP6:
-      ESP_LOGI(snetwork_tag, "IPv6 : %s", ip6addr_ntoa((const ip6_addr_t *)&event->event_info.got_ip6.ip6_info.ip));
-      break;
-
-    case SYSTEM_EVENT_STA_GOT_IP:
-      ESP_LOGI(snetwork_tag, "Network connected, ip %s, SSID %s",
-        ip4addr_ntoa((const ip4_addr_t *)&event->event_info.got_ip.ip_info.ip),
-        network->getSSID());
-
-      network->setWifiOk(true);
-
-  /*
-   * Need the brackets or g++ fails in strange ways due to the additional variable
-   * in a switch/case construction.
-   *	xtensa-esp32-elf-g++
-   *	gcc version 5.2.0 (crosstool-NG crosstool-ng-1.22.0-80-g6c4433a)
-   */
-  {
-      list<module_registration>::iterator mp;
-      ESP_LOGD(snetwork_tag, "Network Connected : %d modules", network->modules.size());
-
-      for (mp = network->modules.begin(); mp != network->modules.end(); mp++) {
-	if (mp->NetworkConnected != 0) {
-	  ESP_LOGD(snetwork_tag, "Network Connected : call module %s", mp->module);
-
-	  // FIX ME how to treat result
-	  mp->result = mp->NetworkConnected(ctx, event);
-	}
-      }
-  }
-
-      if (network) network->NetworkConnected(ctx, event);
-#ifdef USE_ACME
-      if (acme && network->NetworkHasMyAcmeBypass()) {
-        // Note only start running ACME if we're on a network configured for it
-        acme->NetworkConnected(ctx, event);
-      }
-#endif
-      break;
-
-    case SYSTEM_EVENT_STA_DISCONNECTED:
-      ESP_LOGE(snetwork_tag, "STA_DISCONNECTED");
-
-      if (network->getStatus() == NS_CONNECTING) {
-        system_event_sta_disconnected_t *evp = &event->event_info.disconnected;
-        /*
-	 * This is the asynchronous reply of a failed connection attempt.
-	 * If this means a network should be discarded, do so.
-	 * After that, start scanning again.
-	 */
-        ESP_LOGE(snetwork_tag, "Failed to connect to this SSID (reason %d %s)",
-	  evp->reason, WifiReason2String(evp->reason));
-
-	network->setStatus(NS_FAILED);
-	esp_wifi_stop();
-
-	switch (evp->reason) {
-	case WIFI_REASON_NO_AP_FOUND:	// FIX ME probably more than just this case
-	case WIFI_REASON_AUTH_FAIL:
-          network->setReason(evp->reason);
-	  network->DiscardCurrentNetwork();
-	  break;
-	default:
-	  break;
-	}
-
-	// Trigger next try
-	network->setStatus(NS_SETUP_DONE);
-	// esp_wifi_connect();
-	network->SetupWifi();
-        network->WaitForWifi();
-      } else {
-	/*
-	 * We were connected but lost the network. So gracefully shut down open connections,
-	 * and then try to reconnect to the network.
-	 */
-        ESP_LOGI(snetwork_tag, "STA_DISCONNECTED, restarting");
-        network->setWifiOk(false);
-
-#ifdef USE_ACME
-	if (acme) acme->NetworkDisconnected(ctx, event);
-#endif
-	if (network) network->NetworkDisconnected(ctx, event);
-
-        network->StopWifi();			// This also schedules a restart
-      }
-      break;
-
-    default:
-      break;
-  }
-  return ESP_OK;
-}
-
-/*
- * This needs to be done before we can query the adapter MAC,
- * which we need to pass to Config.
- * After this, we can also await attachment to a network.
- */
-/*
- * Legacy ESP-IDF v3.*
- */
-void Network::SetupWifi(void) {
-  esp_err_t err;
-
-  mqtt_message = 0;
-
-  tcpip_adapter_init();		// Deprecated
-
-  err = esp_event_loop_init(wifi_event_handler, NULL);
-  if (err != ESP_OK) {
-      /*
-       * ESP_FAIL here means we've already done this, see components/esp32/event_loop.c :
-       * esp_err_t esp_event_loop_init(system_event_cb_t cb, void *ctx)
-       * {
-       *     if (s_event_init_flag) {
-       *         return ESP_FAIL;
-       *     }
-       * ..
-       * }
-       *
-       * So no action on this error.
-       */
-  }
-  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-  err = esp_wifi_init(&cfg);
-  if (err != ESP_OK) {
-      ESP_LOGE(network_tag, "Failed esp_wifi_init, reason %d", (int)err);
-      // FIXME
-      return;
-  }
-  err = esp_wifi_set_storage(WIFI_STORAGE_RAM);
-  if (err != ESP_OK) {
-      ESP_LOGE(network_tag, "Failed esp_wifi_set_storage, reason %d", (int)err);
-      // FIXME
-      return;
-  }
-
-  status = NS_SETUP_DONE;
-}
-#else
 /*
  * ESP-IDF v4.*
  */
-void event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void *event_data) {
+void Network::event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void *event_data) {
   if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
     esp_wifi_connect();
   }
 }
 
-void discon_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void *event_data) {
+void Network::discon_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void *event_data) {
   esp_wifi_connect();
   ESP_LOGD(snetwork_tag, "retry to connect to the AP");
 
@@ -387,7 +209,7 @@ void discon_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_
   }
 }
 
-void ip_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void *event_data) {
+void Network::ip_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void *event_data) {
     ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
 
     ESP_LOGI(snetwork_tag, "Network connected, ip " IPSTR " SSID %s",
@@ -454,7 +276,6 @@ void Network::SetupWifi(void) {
 
   status = NS_SETUP_DONE;
 }
-#endif	/* esp-idf v4.x */
 
 void Network::WaitForWifi(void)
 {
@@ -548,6 +369,8 @@ void Network::WaitForWifi(void)
         ESP_LOGE(network_tag, "Error %d enabling Wifi with WPA2, %s", err, esp_err_to_name(err));
 	continue;
       }
+#else
+#warning "No WPA2 implementation"
 #endif	/* WPA2 && ESP-IDF 3.x */
     } else {
       /*
@@ -636,7 +459,7 @@ void Network::StopWifi() {
 /*
  * SNTP notifier
  */
-void sntp_sync_notify(struct timeval *tvp) {
+void Network::sntp_sync_notify(struct timeval *tvp) {
   char ts[20];
   struct tm *tmp = localtime(&tvp->tv_sec);
   strftime(ts, sizeof(ts), "%Y-%m-%d %T", tmp);

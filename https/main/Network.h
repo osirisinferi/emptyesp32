@@ -27,11 +27,7 @@
 #include <esp_http_server.h>
 #include <esp_log.h>
 #include <esp_sntp.h>
-#if (ESP_IDF_VERSION < ESP_IDF_VERSION_VAL(4, 0, 0))
-#include <esp_event_loop.h>
-#else
 #include <esp_event.h>
-#endif
 
 #include <list>
 using namespace std;
@@ -158,11 +154,12 @@ private:
   // Modules interested in network events
   list<module_registration>	modules;
   friend esp_err_t wifi_event_handler(void *ctx, system_event_t *event);
-  friend void sntp_sync_notify(struct timeval *);
+  static void sntp_sync_notify(struct timeval *);
 
-  friend void event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void* event_data);
-  friend void ip_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void* event_data);
-  friend void discon_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void* event_data);
+  static void event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void* event_data);
+  static void ip_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void* event_data);
+  static void discon_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void* event_data);
+  static const char *WifiReason2String(int r);
 };
 
 // Global variables
