@@ -218,11 +218,10 @@ bool JsonServer::isConnectionAllowed(httpd_req_t *req) {
 
   if (sctx) {
     esp_tls_t *pctx = (esp_tls_t *)sctx;
-    ESP_LOGE(jsonserver_tag, "  ssl %p conf %p cacert %p clientcert %p clientkey %p",
-      (void *)&pctx->ssl, (void *)&pctx->conf, (void *)&pctx->cacert, (void *)&pctx->clientcert, (void *)&pctx->clientkey);
+    // ESP_LOGE(jsonserver_tag, "  ssl %p conf %p cacert %p clientcert %p clientkey %p",
+    //  (void *)&pctx->ssl, (void *)&pctx->conf, (void *)&pctx->cacert,
+    //  (void *)&pctx->clientcert, (void *)&pctx->clientkey);
 
-  // Stolen from Secure.cpp
-  {
     /*
      * Awaiting bugfix on esp-idf to make clientcert work.
      *
@@ -236,35 +235,35 @@ bool JsonServer::isConnectionAllowed(httpd_req_t *req) {
     // mbedtls_x509_crt *cert = &pctx->clientcert;
     mbedtls_x509_crt *cert = stolen_cert;
 
-    unsigned char buf[10240];
-    int ret;
+#if 0
+    {
+      unsigned char buf[1024];
+      int ret;
 
-    // Get human-readable certificate info
-    if ((ret = mbedtls_x509_crt_info((char *) buf, sizeof(buf) - 1, "", cert)) >= 0) {
-      // Show it
-      ESP_LOGI(jsonserver_tag, "TLS client\n%s", buf);
-    } else {
-      ESP_LOGE(jsonserver_tag, "mbedtls_x509_crt_info -> %d", ret);
+      // Get human-readable certificate info
+      if ((ret = mbedtls_x509_crt_info((char *) buf, sizeof(buf) - 1, "", cert)) >= 0) {
+        // Show it
+        ESP_LOGI(jsonserver_tag, "TLS client\n%s", buf);
+      } else {
+        ESP_LOGE(jsonserver_tag, "mbedtls_x509_crt_info -> %d", ret);
+      }
     }
-
+#endif
     // Subject (= calling node)
     mbedtls_x509_name subject = cert->subject;
-    if (mbedtls_x509_dn_gets((char *)buf, sizeof(buf), &subject) > 0) {
+    char buf[80];
+    if (mbedtls_x509_dn_gets(buf, sizeof(buf), &subject) > 0) {
       ESP_LOGD(jsonserver_tag, "TLS Node : %s", buf);
 
-      char *pcn = strstr((const char *)buf, "CN=");
-      char *pcn3 = pcn+3;
-
-      if (strcasestr(pcn3, "dannybackx.dns-cloud.net") != 0)
+      if (strcasestr(buf, "dannybackx.dns-cloud.net") != 0)
 	return ESP_OK;
-      else if (strcasestr(pcn3, "dannybackx.hopto.org") != 0)
-	return ESP_OK;
+      else if (strcasestr(buf, "dannybackx.hopto.org") != 0)
+        return ESP_OK;
       else {
-	ESP_LOGE(jsonserver_tag, "TLS CN : %s, not authorized", pcn3);
+	ESP_LOGE(jsonserver_tag, "TLS CN : %s, not authorized", buf);
 	return ESP_FAIL;
       }
     }
-  }
   }
 
   return ESP_OK;
