@@ -248,9 +248,11 @@ void App::setup(void) {
         acme->GenerateCertificateKey();
       }
 
-      ESP_LOGE(app_tag, "Don't have a valid certificate ...");
-      // acme->CreateNewAccount();
-      // acme->CreateNewOrder();
+      ESP_LOGD(app_tag, "%s: don't have a valid certificate ...", __FUNCTION__);
+
+      /*
+       * ACME can't work here yet (time isn't set), so defer until loop().
+       */
     } else {
       ESP_LOGD(app_tag, "Certificate is valid");
     }
@@ -347,14 +349,6 @@ void App::delayed_start(struct timeval *tvp)
       sprintf(app->boot_msg, "Controller %s boot at %s", config->myName(), ts);
     }
   }
-
-  if (acme && network->NetworkHasMyAcmeBypass()) {
-    if (! acme->HaveValidCertificate()) {
-      ESP_LOGI(app->app_tag, "Don't have a valid certificate ...");
-      acme->CreateNewAccount();
-      acme->CreateNewOrder();
-    }
-  }
 }
 
 void loop() {
@@ -443,6 +437,18 @@ void App::loop() {
       if (! inited) {
         inited = true;
 	ESP_LOGD(app_tag, "%s: ACME loop call", __FUNCTION__);
+
+        if (! acme->HaveValidCertificate()) {
+	  ESP_LOGI(app->app_tag, "%s: no valid certificate ... creating new account+order",
+	    __FUNCTION__);
+
+	  /*
+	   * This kickstarts the ACME process.
+	   * Disable this if that's not desired.
+	   */
+	  acme->CreateNewAccount();
+	  acme->CreateNewOrder();
+	}
       }
 
       bool upd = acme->loop(nowts);
