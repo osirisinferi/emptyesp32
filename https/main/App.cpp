@@ -44,6 +44,8 @@ bool			time_set = false;
 
 App *app;
 
+int ListDir(const char *dn);
+
 // Initial function
 void setup(void) {
   app = new App();
@@ -134,6 +136,8 @@ void App::setup(void) {
 
   ESP_LOGI(app_tag, "Using file based config (%s/%s)", Config::base_path, CONFIG_CONFIG_FN);
 
+  // ListDir(Config::base_path);
+
   /*
    * Initialize the Config, so it can be called by those who need to install a hook
    */
@@ -189,6 +193,7 @@ void App::setup(void) {
   if (config->runAcme()) {
     acme = new Acme();
     acme->setFilenamePrefix(config->getFilePrefix());
+    acme->setFsPrefix(config->getFilePrefix());
     // acme->ProcessStepByStep(true);
   }
 
@@ -581,3 +586,40 @@ App::~App() {
 void App::Report(const char *line) {
   ESP_LOGI(app_tag, "%s", line);
 }
+
+// List all files on LittleFS
+#if 0
+int ListDir(const char *dn) {
+  DIR *d = opendir(dn);
+  struct dirent *de;
+  int count = 0;
+
+  rewinddir(d);
+  while (1) {
+    de = readdir(d);
+    if (de == 0) {
+      ESP_LOGD("fs", "Dir %s contained %d entries", dn, count);
+      closedir(d);
+      return count;
+    }
+    count++;
+    ESP_LOGI("fs", "Dir %s entry %d : %s", dn, count, de->d_name);
+
+    // Recursively descend
+    if (de->d_type & DT_DIR) {
+      // This doesn't happen with current implementation, but let's be sure
+      // Don't descend into current directory
+      if (strcmp(de->d_name, ".") == 0)
+        continue;
+
+      int len = strlen(dn) + strlen(de->d_name) + 2;
+      char *n = (char *)malloc(len);		// Note freed locally
+      strcpy(n, dn);
+      strcat(n, "/");
+      strcat(n, de->d_name);
+      count += ListDir(n);
+      free(n);
+    }
+  }
+}
+#endif
