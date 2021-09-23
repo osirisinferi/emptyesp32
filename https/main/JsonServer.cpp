@@ -217,7 +217,7 @@ bool JsonServer::isConnectionAllowed(httpd_req_t *req) {
   ESP_LOGE(jsonserver_tag, "%s: httpd_sess_get_transport_ctx(https) -> %p", __FUNCTION__, sctx);
 
   if (sctx) {
-    esp_tls_t *pctx = (esp_tls_t *)sctx;
+    // esp_tls_t *pctx = (esp_tls_t *)sctx;
     // ESP_LOGE(jsonserver_tag, "  ssl %p conf %p cacert %p clientcert %p clientkey %p",
     //  (void *)&pctx->ssl, (void *)&pctx->conf, (void *)&pctx->cacert,
     //  (void *)&pctx->clientcert, (void *)&pctx->clientkey);

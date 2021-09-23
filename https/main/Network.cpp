@@ -29,7 +29,6 @@
 #include "Network.h"
 
 #include <esp_wifi.h>
-#include "mqtt_client.h"
 #include <freertos/task.h>
 #include <sys/socket.h>
 
@@ -38,13 +37,10 @@
 #include "mdns.h"
 
 Network::Network() {
-  reconnect_interval = 30;
+  reconnect_interval = 2;
   connected = false;
 
   status = NS_NONE;
-  first_time = true;
-
-  last_mqtt_message_received = 0;
 
   restart_time = 0;
 }
@@ -150,11 +146,6 @@ const char *Network::WifiReason2String(int r) {
 }
 
 /*
- * The ESP-IDF APIs have changed quite a bit between v3.x and v4 :-( so we have two versions
- * of some functions here. The event handler also has different parameters.
- */
-
-/*
  * ESP-IDF v4.*
  */
 void Network::event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void *event_data) {
@@ -201,7 +192,6 @@ void Network::discon_event_handler(void *ctx, esp_event_base_t event_base, int32
      * and then try to reconnect to the network.
      */
     ESP_LOGI(snetwork_tag, "STA_DISCONNECTED, restarting");
-    network->setWifiOk(false);
 
 #ifdef USE_ACME
     if (acme) acme->NetworkDisconnected(ctx, (system_event_t *)event_data);
@@ -217,8 +207,6 @@ void Network::ip_event_handler(void *ctx, esp_event_base_t event_base, int32_t e
 
     ESP_LOGI(snetwork_tag, "Network connected, ip " IPSTR " SSID %s",
       IP2STR(&event->ip_info.ip), network->getSSID());
-
-    network->setWifiOk(true);
 
     list<module_registration>::iterator mp;
     ESP_LOGD(snetwork_tag, "Network Connected : %d modules", network->modules.size());
@@ -247,25 +235,30 @@ void Network::ip_event_handler(void *ctx, esp_event_base_t event_base, int32_t e
 #endif
 }
 
-void Network::SetupWifi(void) {
-  esp_err_t err;
-
-  mqtt_message = 0;
+/*
+ * The setup-once part of initialization
+ */
+void Network::SetupOnce(void) {
   ESP_LOGD(network_tag, "%s %d", __FUNCTION__, __LINE__);
 
-  if (first_time) {
-    first_time = false;
-
-    esp_netif_init();
-    esp_event_loop_create_default();
-    esp_netif_create_default_wifi_sta();
-  }
+  esp_netif_init();
+  esp_event_loop_create_default();
+  esp_netif_create_default_wifi_sta();
 
   esp_event_handler_instance_t inst_any_id, inst_got_ip, inst_discon;
 
   esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL, &inst_any_id);
   esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &discon_event_handler, NULL, &inst_discon);
   esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &ip_event_handler, NULL, &inst_got_ip);
+
+}
+
+/*
+ * This part of initialization needs to be re-done after stopping wifi.
+ * All of this is independent of the actual network we're attaching to.
+ */
+void Network::SetupWifi(void) {
+  esp_err_t err;
 
   wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
   err = esp_wifi_init(&cfg);
@@ -284,6 +277,10 @@ void Network::SetupWifi(void) {
   status = NS_SETUP_DONE;
 }
 
+/*
+ * The followup to SetupWifi() : try one network after the other.
+ * Somewhat complicated because results of operations triggered here come in asynchronously (via event handlers).
+ */
 void Network::WaitForWifi(void)
 {
   wifi_config_t wifi_config;
@@ -326,6 +323,7 @@ void Network::WaitForWifi(void)
     }
 
     if (mywifi[ix].eap_password && strlen(mywifi[ix].eap_password) > 0) {
+	// This is left here as inspiration for esp-idf-4.x WPA2 implementation
 #if (ESP_IDF_VERSION_MAJOR == 3)
       /*
        * Set the Wifi to STAtion mode on the network specified by SSID (and optionally BSSID).
@@ -437,11 +435,6 @@ void Network::WaitForWifi(void)
   }
 }
 
-// Flag the connection as ok
-void Network::setWifiOk(bool ok) {
-  wifi_ok = ok;
-}
-
 void Network::StopWifi() {
   esp_err_t err;
 
@@ -525,39 +518,6 @@ void Network::CertificateUpdated() {
   }
 }
 
-/*
- * This function is called when we see a problem.
- */
-void Network::disconnected(const char *fn, int line) {
-  switch (status) {
-  case NS_RUNNING:
-    ESP_LOGE(network_tag, "Network is not connected (caller: %s line %d)", __FUNCTION__, __LINE__);
-
-    if (strcmp(fn, "mqtt_event_handler") == 0) {
-      ESP_LOGE(network_tag, "Network:disconnected (mqtt) -> ScheduleRestartWifi (%s line %d)", __FUNCTION__, __LINE__);
-      ScheduleRestartWifi();
-      return;
-    }
-    status = NS_FAILED;
-    last_connect = stableTime->Query();
-    wifi_ok = false;
-    return;
-  case NS_NONE:
-  case NS_CONNECTING:
-    return;
-  case NS_SETUP_DONE:
-  case NS_FAILED:
-    break;
-  }
-
-  ESP_LOGE(network_tag, "Network:disconnected -> ScheduleRestartWifi (%s line %d)", __FUNCTION__, __LINE__);
-  ScheduleRestartWifi();
-}
-
-void Network::eventDisconnected(const char *fn, int line) {
-  ESP_LOGE(network_tag, "Disconnect event (caller: %s line %d)", __FUNCTION__, __LINE__);
-}
-
 void Network::NetworkConnected(void *ctx, system_event_t *event) {
   connected = true;
   security->NetworkConnected(ctx, event);
@@ -608,48 +568,12 @@ bool Network::isConnected() {
   return connected;
 }
 
-void Network::GotDisconnected(const char *fn, int line) {
-  ESP_LOGE(network_tag, "Network is not connected (caller: %s line %d)", __FUNCTION__, __LINE__);
-  status = NS_NONE;
-}
-
 void Network::Report() {
   ESP_LOGD(network_tag, "Report: status %s",
     (status == NS_RUNNING) ? "NS_RUNNING" :
     (status == NS_FAILED) ? "NS_FAILED" :
     (status == NS_NONE) ? "NS_NONE" :
     (status == NS_CONNECTING) ? "NS_CONNECTING" : "?");
-}
-
-/*
- * Input from MQTT
- */
-void Network::mqttSubscribed() {
-  ESP_LOGD(network_tag, "MQTT subscribed");
-}
-
-void Network::mqttUnsubscribed() {
-  ESP_LOGE(network_tag, "MQTT unsubscribed");
-}
-
-void Network::mqttDisconnected() {
-  if (mqtt_message < 3)
-    ESP_LOGE(network_tag, "MQTT disconnected");
-  mqtt_message++;
-
-  // FIX ME do something
-  ESP_LOGE(network_tag, "Network:mqttDisconnected -> ScheduleRestartWifi (%s line %d)", __FUNCTION__, __LINE__);
-  // ScheduleRestartWifi();
-}
-
-void Network::mqttConnected() {
-  ESP_LOGD(network_tag, "MQTT connected");
-}
-
-void Network::gotMqttMessage() {
-  ESP_LOGD(network_tag, "Got MQTT message");
-
-  last_mqtt_message_received = stableTime->Query();
 }
 
 /*
@@ -660,7 +584,7 @@ void Network::ScheduleRestartWifi() {
     return;
 
   time_t now = stableTime->Query();
-  restart_time = now + 2;
+  restart_time = now + reconnect_interval;
 
   ESP_LOGI(network_tag, "%s : set restart_time to %ld", __FUNCTION__, restart_time);
 }
@@ -753,15 +677,6 @@ void Network::RegisterModule(const char *name,
   struct module_registration *mr = new module_registration(name, nc, nd, 0, 0, 0);
 
   RegisterModule(mr);
-}
-
-void Network::KeepAliveStart(const char *module, const time_t) {
-}
-
-void Network::KeepAliveStart(const char *module) {
-}
-
-void Network::KeepAliveReceive(const char *module) {
 }
 
 const char *Network::getSSID() {

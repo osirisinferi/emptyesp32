@@ -105,6 +105,7 @@ void App::setup(void) {
 
 				ESP_LOGD(app_tag, "Starting WiFi "); 
   // First stage, so we can query the MAC
+  network->SetupOnce();
   network->SetupWifi();
 
   // Get short MAC

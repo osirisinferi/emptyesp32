@@ -69,17 +69,7 @@ struct module_registration {
 
 class Network {
 public:
-  void mqttConnected();
-  void mqttDisconnected();
-  void mqttSubscribed();
-  void mqttUnsubscribed();
-  void gotMqttMessage();
-
-  // Indicate failure
-  void disconnected(const char *fn, int line);
-  void GotDisconnected(const char *fn, int line);
-  void eventDisconnected(const char *fn, int line);
-
+  void SetupOnce(void);
   void SetupWifi(void);
   void WaitForWifi(void);
   void setWifiOk(bool);
@@ -93,13 +83,6 @@ public:
   void loop(time_t now);
 
   bool isConnected();
-
-  void StartKeepAlive(time_t);		// Defunct ?
-  void ReceiveKeepAlive();		// Defunct ?
-
-  void KeepAliveStart(const char *module, const time_t);
-  void KeepAliveStart(const char *module);
-  void KeepAliveReceive(const char *module);
 
   void Report();
 
@@ -130,19 +113,13 @@ public:
 
 private:
   const char		*network_tag = "Network";
-  bool			wifi_ok;
   enum NetworkStatus	status;
   int			reason;
   int			network_id;
   bool			connected;
-  bool			first_time;
 
   time_t		last_connect;
   int			reconnect_interval;
-
-  // MQTT
-  time_t		last_mqtt_message_received;
-  uint			mqtt_message;
 
   // Restart
   time_t		restart_time;
