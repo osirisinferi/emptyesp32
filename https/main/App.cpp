@@ -157,6 +157,7 @@ void App::setup(void) {
    * I assume that this one would work for the US : EST5EDT,M3.2.0/2,M11.1.0
    */
   stableTime = new StableTime(config->GetTimezone());
+  tzset();
 
   char *msg = (char *)malloc(180), s[32];		// Note freed locally
   msg[0] = 0;
@@ -314,25 +315,37 @@ void App::setup(void) {
 #warning "Note: cannot have OTA without webserver"
 #endif
 
+  stackReport();
+
+  network->WaitForWifi();
+}
+
+void App::stackReport(void) {
 #if 0
+  return;
+#else
+  // ESP_LOGI(app_tag, "%s: process %s, %p", __FUNCTION__, pcTaskGetName(0), xTaskGetTaskHandle(0));
+  ESP_LOGI(app_tag, "%s: process %s", __FUNCTION__, pcTaskGetName(0));
   /*
    * List of tasks
    * Wrote a private version as indicated in the docs.
    */
   int nt = uxTaskGetNumberOfTasks();
+  // ESP_LOGI(app_tag, "allocating %d x %d", nt, sizeof(TaskStatus_t));
   TaskStatus_t *tl = (TaskStatus_t *)calloc(nt, sizeof(TaskStatus_t));
   if (tl) {
     uint32_t ulTotalRunTime;
     int tn = uxTaskGetSystemState(tl, nt, &ulTotalRunTime);
+    ESP_LOGI(app_tag, "     Id TaskHandle            Task Name  Free");
     for (int i=0; i<tn; i++) {
       ESP_LOGI(app_tag, "Task %02d %p %20s %5d", i, tl[i].xHandle, tl[i].pcTaskName, tl[i].usStackHighWaterMark);
     }
+
+    free((void *)tl);
+  } else {
+    ESP_LOGE(app_tag, "%s: could not allocate %d x %d", __FUNCTION__, nt, sizeof(TaskStatus_t));
   }
-
-  free((void *)tl);
 #endif
-
-  network->WaitForWifi();
 }
 
 /*

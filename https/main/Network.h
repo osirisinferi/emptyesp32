@@ -135,6 +135,7 @@ private:
   int			reason;
   int			network_id;
   bool			connected;
+  bool			first_time;
 
   time_t		last_connect;
   int			reconnect_interval;

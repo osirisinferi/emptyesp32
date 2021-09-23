@@ -54,37 +54,38 @@
 
 class App {
 public:
-  App();
-  ~App();
-  void setup(void);
-  void loop(void);
-  void Report(const char *line);
+			App();
+			~App();
+  void			setup(void);
+  void			loop(void);
+  void			Report(const char *line);
+  void			stackReport(void);
 
 // Global variables
-  bool		OTAbusy;
-  time_t	nowts, boot_time;
-  const char	*build;
+  bool			OTAbusy;
+  time_t		nowts, boot_time;
+  const char		*build;
 
 private:
-  const char	*app_tag = "App";
+  const char		*app_tag = "App";
 
-  time_t	dyndns_timeout = 0,
-  		dyndns2_timeout = 0;
+  time_t		dyndns_timeout = 0,
+  			dyndns2_timeout = 0;
 
-  bool		ftp_started;
-  struct timeval otv;
-  int		loop_count;
-  const int	count_max = 100000;
-  long		sum;
-  time_t	last_try;
-  bool		boot_report_ok;
-  char		*boot_msg;
+  bool			ftp_started;
+  struct timeval	otv;
+  int			loop_count;
+  const int		count_max = 100000;
+  long			sum;
+  time_t		last_try;
+  bool			boot_report_ok;
+  char			*boot_msg;
 
-  static esp_err_t app_connect(void *a, system_event_t *ep);
-  static esp_err_t app_disconnect(void *a, system_event_t *ep);
-  static void delayed_start(struct timeval *tvp);
-  friend void MyInitArduino();
+  static esp_err_t	app_connect(void *a, system_event_t *ep);
+  static esp_err_t	app_disconnect(void *a, system_event_t *ep);
+  static void		delayed_start(struct timeval *tvp);
+  friend void		MyInitArduino();
 };
 
-extern App	*app;
-extern void	ftp_stop(), ftp_init();
+extern App		*app;
+extern void		ftp_stop(), ftp_init();
