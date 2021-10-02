@@ -1,3 +1,4 @@
+#define	USE_USER_CB_PATCH
 /*
  * Copyright (c) 2019, 2020, 2021 Danny Backx
  *
@@ -59,7 +60,7 @@ WebServer::WebServer() {
   cert = 0;
 }
 
-static const char *http_method2string(int m) {
+const char *WebServer::http_method2string(int m) {
   switch (m) {
   case HTTP_GET: return "HTTP_GET";
   case HTTP_PUT: return "HTTP_PUT";
@@ -142,6 +143,20 @@ void WebServer::ConfigureSSLServer() {
 #endif
 }
 
+#ifdef	USE_USER_CB_PATCH
+void WebServer::https_user_cb(esp_tls_t *tls, int sockfd) {
+  char buf[1024];
+
+  _ws->peer_cert = (mbedtls_x509_crt *)mbedtls_ssl_get_peer_cert(&tls->ssl);
+  if (_ws->peer_cert != 0) {
+    mbedtls_x509_crt_info((char *)buf, sizeof(buf)-1, "", _ws->peer_cert);
+    ESP_LOGI(_ws->webserver_tag, "%s: got it", __FUNCTION__);
+  } else {
+    ESP_LOGE(_ws->webserver_tag, "%s: could not get peer certificate", __FUNCTION__);
+  }
+}
+#endif
+
 void WebServer::FreeCerts() {
 # ifdef USE_ACME
   if (cert != 0) free((void *)cert);
@@ -171,6 +186,10 @@ void WebServer::StartSSLServer() {
     start_secure = false;
   scfg.cacert_pem = cert;
   scfg.cacert_len = cert ? len + 1 : 0;
+
+#ifdef	USE_USER_CB_PATCH
+  scfg.user_cb = https_user_cb;
+#endif
 
   /*
    * See https_server:create_secure_context :

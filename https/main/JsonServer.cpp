@@ -1,3 +1,5 @@
+#undef	USE_HACK_STOLEN_CERT
+#define	USE_USER_CB_PATCH
 /*
  * Copyright (c) 2021 Danny Backx
  *
@@ -197,12 +199,14 @@ esp_err_t JsonServer::json_handler(httpd_req_t *req) {
   return ESP_OK;
 }
 
+#ifdef	USE_HACK_STOLEN_CERT
 /*
  * Awaiting bugfix on esp-idf to make clientcert work.
  */
 extern "C" {
   mbedtls_x509_crt *stolen_cert = 0;
 }
+#endif
 
 // components/openssl/include/internal/ssl_types.h
 #include <internal/ssl_types.h>
@@ -233,7 +237,13 @@ bool JsonServer::isConnectionAllowed(httpd_req_t *req) {
      *   }
      */
     // mbedtls_x509_crt *cert = &pctx->clientcert;
+#ifdef	USE_HACK_STOLEN_CERT
     mbedtls_x509_crt *cert = stolen_cert;
+#elif defined(USE_USER_CB_PATCH)
+    mbedtls_x509_crt *cert = _ws->peer_cert;
+#else
+#error Need a way to get the cert
+#endif
 
 #if 0
     {
@@ -266,7 +276,7 @@ bool JsonServer::isConnectionAllowed(httpd_req_t *req) {
     }
   }
 
-  return ESP_OK;
+  return ESP_FAIL;
 }
 
 void JsonServer::CertificateUpdate() {

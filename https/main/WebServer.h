@@ -35,6 +35,8 @@ class WebServer {
     ~WebServer();
     httpd_handle_t getRegularServer();
     httpd_handle_t getSSLServer();
+    const char *http_method2string(int);
+    mbedtls_x509_crt *peer_cert;
 
   private:
     const char *webserver_tag = "WebServer";
@@ -52,6 +54,7 @@ class WebServer {
     void SendPage(httpd_req_t *);
 
     static esp_err_t alarm_handler(httpd_req_t *req);
+    static void https_user_cb(esp_tls_t *tls, int sockfd);
 
     void StartSSLServer();
     void StopSSLServer();
