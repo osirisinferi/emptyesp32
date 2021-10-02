@@ -1,3 +1,6 @@
+/*
+ * Note see patch at https://github.com/espressif/esp-idf/issues/7479
+ */
 #define	USE_USER_CB_PATCH
 /*
  * Copyright (c) 2019, 2020, 2021 Danny Backx
