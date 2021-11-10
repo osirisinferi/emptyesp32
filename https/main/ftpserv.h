@@ -52,7 +52,13 @@
 #include <time.h>
 #include <ctype.h>
 #include <fcntl.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <dirent.h>
+#ifdef __cplusplus
+}
+#endif
 #include <pthread.h>
 #include <sys/socket.h>
 #include <netinet/in.h>

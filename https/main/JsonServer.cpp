@@ -209,7 +209,7 @@ extern "C" {
 #endif
 
 // components/openssl/include/internal/ssl_types.h
-#include <internal/ssl_types.h>
+// #include <internal/ssl_types.h>
 bool JsonServer::isConnectionAllowed(httpd_req_t *req) {
   // return ESP_OK;
 

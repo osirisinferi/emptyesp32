@@ -137,7 +137,10 @@ private:
   static void event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void* event_data);
   static void ip_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void* event_data);
   static void discon_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void* event_data);
+  static void con_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void* event_data);
   static const char *WifiReason2String(int r);
+  static const char *IPEvent2String(int r);
+  static const char *WifiEvent2String(int r);
 };
 
 // Global variables

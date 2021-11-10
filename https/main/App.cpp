@@ -42,6 +42,9 @@ WebServer		*_ws = 0, *uws = 0;
 JsonServer		*jsonsrv = 0;
 bool			time_set = false;
 
+#include "WhatsApp.h"
+WhatsApp		*whatsapp = 0;
+
 App *app;
 
 int ListDir(const char *dn);
@@ -316,6 +319,8 @@ void App::setup(void) {
 #warning "Note: cannot have OTA without webserver"
 #endif
 
+  whatsapp = (WhatsApp *)new WhatsApp();
+
   stackReport();
 
   network->WaitForWifi();
@@ -366,6 +371,11 @@ void App::delayed_start(struct timeval *tvp)
       struct tm *tmp = localtime(&app->boot_time);
       strftime(ts, sizeof(ts), "%Y-%m-%d %T", tmp);
       sprintf(app->boot_msg, "Controller %s boot at %s", config->myName(), ts);
+
+#if 0
+      if (whatsapp)
+        whatsapp->SendMessage("Testing 1 2 1 2 ..");
+#endif
     }
   }
 }

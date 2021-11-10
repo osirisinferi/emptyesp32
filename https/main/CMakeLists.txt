@@ -1,7 +1,8 @@
 file(GLOB SOURCES *.cpp *.c ../libraries/acmeclient/*.cpp)
 
 idf_component_register(SRCS "${SOURCES}"
-  INCLUDE_DIRS "." ../libraries/acmeclient ../libraries/arduinojson ${BUILD_DIR})
+  INCLUDE_DIRS "." ${BUILD_DIR}
+  REQUIRES acmeclient arduinojson app_update esp_littlefs wpa_supplicant mdns nvs_flash)
 
 add_custom_command(OUTPUT ${BUILD_DIR}/build.h
 	COMMAND ${COMPONENT_DIR}/generate_build_date ${BUILD_DIR}/build.h

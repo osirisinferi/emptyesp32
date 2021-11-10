@@ -171,11 +171,14 @@ public:
 
   char **includes = 0;
 
+  const char *getPresetIP(), *getPresetGW(), *getPresetSubnetMask();
+
 private:
-  void ConfigInt(JsonObject &jo, const char *name, int *ptr);
-  void ConfigShort(JsonObject &jo, const char *name, int16_t *ptr);
-  void ConfigString(JsonObject &jo, const char *name, char **ptr);
-  void ConfigBool(JsonObject &jo, const char *name, bool *ptr);
+  void ConfigInt(DynamicJsonDocument &jo, const char *name, int *ptr);
+  void ConfigShort(DynamicJsonDocument &jo, const char *name, int16_t *ptr);
+  void ConfigString(DynamicJsonDocument &jo, const char *name, char **ptr);
+  void ConfigBool(DynamicJsonDocument &jo, const char *name, bool *ptr);
+  void ConfigString(DynamicJsonDocument &jo, const char *parent, const char *name, char **ptr);
 
   int16_t siren_pin;
   int16_t radio_pin;
@@ -201,7 +204,7 @@ private:
   void ReadConfig(const char *);
   void ReadConfig(const char *, FILE *);
   void WriteConfig();
-  void ParseConfig(JsonObject &jo);
+  void ParseConfig(DynamicJsonDocument &);	// void ParseConfig(JsonObject &jo);
   void HardCodedConfig(const char *mac);
 
   struct config my_config;
@@ -265,6 +268,10 @@ private:
   void NewSensor(uint32_t id, const char *name, const char *zone);
   void AddDeviceMAC(const char *, bool);
   void AddDeviceIP(const char *, bool);
+
+  // Fixed local IP address
+  char *preset_ip_ip, *preset_ip_mask, *preset_ip_gw;
+
 };
 
 extern Config *config;

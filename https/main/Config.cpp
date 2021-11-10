@@ -89,6 +89,8 @@ Config::Config(char *mac) {
   for (int i=0; i<9; i++)
     includes[i] = 0;
 
+  preset_ip_ip = preset_ip_mask = preset_ip_gw = 0;
+
   // This must be last
   my_config.mac = strdup(mac);
 }
@@ -173,39 +175,48 @@ void Config::ReadConfig(const char *fn, FILE *fp) {
  * Process the configuration : the parameter is JSON formatted config.
  */
 void Config::ReadConfig(const char *js) {
-  ESP_LOGD(config_tag, "ReadConfig %s\n", js);
+  ESP_LOGD(config_tag, "%s %s", __FUNCTION__, js);
 
-  DynamicJsonBuffer jb;
-  JsonObject &json = jb.parseObject(js);
-  if (json.success()) {
-    ParseConfig(json);
+  DynamicJsonDocument json(1024);
+  DeserializationError error = deserializeJson(json, js);
+  if (error) {
+    ESP_LOGE(config_tag, "%s: could not parse JSON (error %s)", __FUNCTION__, error.c_str());
+    ESP_LOGE(config_tag, "JSON : %s", js);
   } else {
-    ESP_LOGE(config_tag, "Could not parse JSON");
+    ParseConfig(json);
   }
 }
 
-void Config::ConfigShort(JsonObject &jo, const char *name, int16_t *ptr) {
+void Config::ConfigShort(DynamicJsonDocument &jo, const char *name, int16_t *ptr) {
   if (jo.containsKey(name)) {
     uint16_t i = jo[name];
     *ptr = i;
   }
 }
 
-void Config::ConfigInt(JsonObject &jo, const char *name, int *ptr) {
+void Config::ConfigInt(DynamicJsonDocument &jo, const char *name, int *ptr) {
   if (jo.containsKey(name)) {
     int i = jo[name];
     *ptr = i;
   }
 }
 
-void Config::ConfigString(JsonObject &jo, const char *name, char **ptr) {
+void Config::ConfigString(DynamicJsonDocument &jo, const char *name, char **ptr) {
   if (jo.containsKey(name)) {
     const char *s = jo[name];
     *ptr = strdup(s);
   }
 }
 
-void Config::ConfigBool(JsonObject &jo, const char *name, bool *ptr) {
+// Inside some other structure
+void Config::ConfigString(DynamicJsonDocument &jo, const char *parent, const char *name, char **ptr) {
+  if (jo.containsKey(parent)) {
+    const char *s = jo[parent][name];
+    *ptr = strdup(s);
+  }
+}
+
+void Config::ConfigBool(DynamicJsonDocument &jo, const char *name, bool *ptr) {
   if (jo.containsKey(name)) {
     bool b = jo[name];
     *ptr = b;
@@ -216,7 +227,7 @@ void Config::ConfigBool(JsonObject &jo, const char *name, bool *ptr) {
  * Note : as we're calling this more than once, it's not fit to overwrite.
  * Initialization should only happen in the Config CTOR.
  */
-void Config::ParseConfig(JsonObject &jo) {
+void Config::ParseConfig(DynamicJsonDocument &jo) {
   ConfigShort(jo, "sirenPin", &siren_pin);
   ConfigString(jo, "name", &name);
 
@@ -358,6 +369,10 @@ void Config::ParseConfig(JsonObject &jo) {
       acme_alt_url[i] = strdup(u);
     }
   }
+
+  ConfigString(jo, "preset_ip", "ip", &preset_ip_ip);
+  ConfigString(jo, "preset_ip", "mask", &preset_ip_mask);
+  ConfigString(jo, "preset_ip", "gw", &preset_ip_gw);
 }
 
 /*
@@ -428,8 +443,8 @@ void Config::HardCodedConfig(const char *mac) {
  * Caller should free the result
  */
 char *Config::QueryConfig() {
-  DynamicJsonBuffer jb;
-  JsonObject &json = jb.createObject();
+  DynamicJsonDocument json(1024);
+
   char	siren_pin_s[8],
 	red_pin_s[8], green_pin_s[8], blue_pin_s[8],
 	radio_pin_s[8],
@@ -534,7 +549,7 @@ char *Config::QueryConfig() {
   json["acme_root_cert_fn"] = acme_root_cert_fn;
 
   if (acme_alt_url) {
-    JsonArray &ja = json.createNestedArray("acme_urls");
+    DynamicJsonDocument ja = json.createNestedArray("acme_urls");
     for (int i=0; acme_alt_url[i]; i++)
       ja.add(acme_alt_url[i]);
   }
@@ -544,13 +559,10 @@ char *Config::QueryConfig() {
   json["mcp9808"] = mcp;
   json["bme280"] = bme;
 
-  int bs = 512;
+  int bs = measureJson(json);
   char *buffer = (char *)malloc(bs);
+  serializeJson(json, buffer, bs);
 
-  if (json.printTo(buffer, bs) == 0) {
-    ESP_LOGE(config_tag, "Failed to write to buffer (size %d)", bs);
-    return 0;
-  }
   return buffer;
 }
 
@@ -874,6 +886,18 @@ bool Config::haveTemperature() {
 
 const char *Config::acmeRootCertificateFilename() {
   return acme_root_cert_fn;
+}
+
+const char *Config::getPresetIP() {
+  return preset_ip_ip;
+}
+
+const char *Config::getPresetGW() {
+  return preset_ip_gw;
+}
+
+const char *Config::getPresetSubnetMask() {
+  return preset_ip_mask;
 }
 
 /*

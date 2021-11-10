@@ -145,12 +145,103 @@ const char *Network::WifiReason2String(int r) {
   }
 }
 
+const char *Network::IPEvent2String(int r) {
+  switch (r) {
+  case IP_EVENT_STA_GOT_IP:		return "STA_GOT_IP";
+  case IP_EVENT_STA_LOST_IP:		return "STA_LOST_IP";
+  case IP_EVENT_AP_STAIPASSIGNED:	return "AP_STAIPASSIGNED";
+  case IP_EVENT_GOT_IP6:		return "GOT_IP6";
+  case IP_EVENT_ETH_GOT_IP:		return "ETH_GOT_IP";
+  case IP_EVENT_PPP_GOT_IP:		return "PPP_GOT_IP";
+  case IP_EVENT_PPP_LOST_IP:		return "PPP_LOST_IP";
+  }
+  return "?";
+}
+
+const char *Network::WifiEvent2String(int r) {
+  switch (r) {
+  case WIFI_EVENT_WIFI_READY:			return "WIFI_READY";
+  case WIFI_EVENT_SCAN_DONE:			return "SCAN_DONE";
+  case WIFI_EVENT_STA_START:			return "STA_START";
+  case WIFI_EVENT_STA_STOP:			return "STA_STOP";
+  case WIFI_EVENT_STA_CONNECTED:		return "STA_CONNECTED";
+  case WIFI_EVENT_STA_DISCONNECTED:		return "STA_DISCONNECTED";
+  case WIFI_EVENT_STA_AUTHMODE_CHANGE:		return "STA_AUTHMODE_CHANGE";
+  case WIFI_EVENT_STA_WPS_ER_SUCCESS:		return "STA_WPS_ER_SUCCESS";
+  case WIFI_EVENT_STA_WPS_ER_FAILED:		return "STA_WPS_ER_FAILED";
+  case WIFI_EVENT_STA_WPS_ER_TIMEOUT:		return "STA_WPS_ER_TIMEOUT";
+  case WIFI_EVENT_STA_WPS_ER_PIN:		return "STA_WPS_ER_PIN";
+  case WIFI_EVENT_STA_WPS_ER_PBC_OVERLAP:	return "STA_WPS_ER_PBC_OVERLAP";
+  case WIFI_EVENT_AP_START:			return "AP_START";
+  case WIFI_EVENT_AP_STOP:			return "AP_STOP";
+  case WIFI_EVENT_AP_STACONNECTED:		return "AP_STACONNECTED";
+  case WIFI_EVENT_AP_STADISCONNECTED:		return "AP_STADISCONNECTED";
+  case WIFI_EVENT_AP_PROBEREQRECVED:		return "AP_PROBEREQRECVED";
+  case WIFI_EVENT_FTM_REPORT:			return "FTM_REPORT";
+  case WIFI_EVENT_STA_BSS_RSSI_LOW:		return "STA_BSS_RSSI_LOW";
+  case WIFI_EVENT_ACTION_TX_STATUS:		return "ACTION_TX_STATUS";
+  case WIFI_EVENT_ROC_DONE:			return "ROC_DONE";
+  case WIFI_EVENT_STA_BEACON_TIMEOUT:		return "STA_BEACON_TIMEOUT";
+  }
+  return "?";
+}
+
 /*
  * ESP-IDF v4.*
  */
 void Network::event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void *event_data) {
   if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
     esp_wifi_connect();
+    return;
+  }
+  if (event_base == WIFI_EVENT)
+    ESP_LOGE(snetwork_tag, "%s: %s %s", __FUNCTION__, "wifi", WifiEvent2String(event_id));
+  else if (event_base == IP_EVENT) {
+    ESP_LOGE(snetwork_tag, "%s: %s %s", __FUNCTION__, "ip", IPEvent2String(event_id));
+#if 0
+    if (event_id == IP_EVENT_STA_GOT_IP)
+      ESP_LOGE(snetwork_tag, "%s: %s %s", __FUNCTION__, "ip", "got-ip");
+    else
+      ESP_LOGE(snetwork_tag, "%s: %s %d", __FUNCTION__, "ip", (int) event_id);
+#endif
+  } else
+    ESP_LOGE(snetwork_tag, "%s: %d %d", __FUNCTION__, (int) event_base, (int) event_id);
+}
+
+/*
+ * We use the connect event handler for one purpose only : setting preset (fixed) IP addresses.
+ */
+void Network::con_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void *event_data) {
+  if (config == 0) {
+    ESP_LOGE(snetwork_tag, "%s: no config, bailing", __FUNCTION__);
+    return;
+  }
+
+  ESP_LOGI(snetwork_tag, "trying preset ip %s gw %s mask %s",
+    config->getPresetIP() ? config->getPresetIP() : "",
+    config->getPresetGW() ? config->getPresetGW() : "",
+    config->getPresetSubnetMask() ? config->getPresetSubnetMask() : "");
+
+  if (config == 0 || config->getPresetIP() == 0 || config->getPresetGW() == 0
+   || config->getPresetSubnetMask() == 0)
+    return;
+
+  esp_netif_t *netif = (esp_netif_t *)ctx;
+
+  if (esp_netif_dhcpc_stop(netif) != ESP_OK) {
+    ESP_LOGE(snetwork_tag, "%s: failed to stop dhcp client", __FUNCTION__);
+    return;
+  }
+
+  esp_netif_ip_info_t ip;
+  memset(&ip, 0 , sizeof(esp_netif_ip_info_t));
+  ip.ip.addr = ipaddr_addr(config->getPresetIP());
+  ip.netmask.addr = ipaddr_addr(config->getPresetSubnetMask());
+  ip.gw.addr = ipaddr_addr(config->getPresetGW());
+
+  if (esp_netif_set_ip_info(netif, &ip) != ESP_OK) {
+    ESP_LOGE(snetwork_tag, "%s: failed to set IP address", __FUNCTION__);
+    return;
   }
 }
 
@@ -203,36 +294,39 @@ void Network::discon_event_handler(void *ctx, esp_event_base_t event_base, int32
 }
 
 void Network::ip_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void *event_data) {
-    ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
+  ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
 
-    ESP_LOGI(snetwork_tag, "Network connected, ip " IPSTR " SSID %s",
-      IP2STR(&event->ip_info.ip), network->getSSID());
+  vTaskDelay(500 / portTICK_PERIOD_MS);
 
-    list<module_registration>::iterator mp;
-    ESP_LOGD(snetwork_tag, "Network Connected : %d modules", network->modules.size());
+  ESP_LOGI(snetwork_tag, "Network connected, ip " IPSTR " SSID %s",
+    IP2STR(&event->ip_info.ip), network->getSSID());
 
-    for (mp = network->modules.begin(); mp != network->modules.end(); mp++) {
-      if (mp->NetworkConnected != 0) {
-	ESP_LOGD(snetwork_tag, "Network Connected : call module %s", mp->module);
+  list<module_registration>::iterator mp;
+  ESP_LOGD(snetwork_tag, "Network Connected : %d modules", network->modules.size());
 
-	// FIX ME how to treat result
-	mp->result = mp->NetworkConnected(ctx, (system_event_t *)event_data);
-	if (mp->result)
-	  ESP_LOGE(snetwork_tag, "Network Connected : return %d from module %s",
-	    mp->result, mp->module);
-	else
-	  ESP_LOGD(snetwork_tag, "Network Connected : return %d from module %s",
-	    mp->result, mp->module);
-      }
+  for (mp = network->modules.begin(); mp != network->modules.end(); mp++) {
+    if (mp->NetworkConnected != 0) {
+      ESP_LOGD(snetwork_tag, "Network Connected : call module %s", mp->module);
+
+      // FIX ME how to treat result
+      mp->result = mp->NetworkConnected(ctx, (system_event_t *)event_data);
+      if (mp->result)
+	ESP_LOGE(snetwork_tag, "Network Connected : return %d from module %s",
+	  mp->result, mp->module);
+      else
+	ESP_LOGD(snetwork_tag, "Network Connected : return %d from module %s",
+	  mp->result, mp->module);
     }
+  }
 
-    if (network) network->NetworkConnected(ctx, (system_event_t *)event_data);
+  if (network) network->NetworkConnected(ctx, (system_event_t *)event_data);
 #ifdef USE_ACME
-    if (acme && network->NetworkHasMyAcmeBypass()) {
-      // Note only start running ACME if we're on a network configured for it
-      acme->NetworkConnected(ctx, (system_event_t *)event_data);
-    }
+  if (acme && network->NetworkHasMyAcmeBypass()) {
+    // Note only start running ACME if we're on a network configured for it
+    acme->NetworkConnected(ctx, (system_event_t *)event_data);
+  }
 #endif
+  ESP_LOGI(snetwork_tag, "Return from %s", __FUNCTION__);
 }
 
 /*
@@ -243,13 +337,14 @@ void Network::SetupOnce(void) {
 
   esp_netif_init();
   esp_event_loop_create_default();
-  esp_netif_create_default_wifi_sta();
+  esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
 
-  esp_event_handler_instance_t inst_any_id, inst_got_ip, inst_discon;
+  esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL, NULL);
+  esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_CONNECTED, &con_event_handler, sta_netif, NULL);
+  esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &discon_event_handler, NULL, NULL);
+  esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &ip_event_handler, NULL, NULL);
 
-  esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL, &inst_any_id);
-  esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &discon_event_handler, NULL, &inst_discon);
-  esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &ip_event_handler, NULL, &inst_got_ip);
+  esp_event_handler_instance_register(IP_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL, NULL);
 
 }
 
@@ -416,7 +511,7 @@ void Network::WaitForWifi(void)
       /*
        * FIX ME
        * usually the code survives this (ESP_OK happens) but an event gets fired into
-       * wifi_event_handler().
+       * wifi_event_handler()
        */
       ESP_LOGE(network_tag, "Failed to start wifi");			// FIXME
       return;
