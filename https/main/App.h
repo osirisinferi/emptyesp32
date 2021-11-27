@@ -32,6 +32,7 @@
 #define	USE_HTTPS_SERVER	// Implement a https server, needs ACME or hardcoded certs
 #undef	USE_HEAP_TRACE
 #undef	USE_HARDCODED_CONFIG
+#define	USE_CONFIG_CLASS
 
 #define	CONFIG_CONFIG_FN	"config.json"
 

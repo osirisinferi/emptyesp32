@@ -34,6 +34,7 @@ using namespace std;
 
 enum NetworkStatus {
   NS_NONE,		// Network uninitialized
+  NS_SETUP_ONCE_DONE,	// OS/HW init calls were performed by the app
   NS_SETUP_DONE,	// OS/HW init calls were performed by the app
   NS_CONNECTING,	// Wifi connected, awaiting IP address
   NS_RUNNING,		// We're alive and kicking
@@ -112,7 +113,7 @@ public:
   void CertificateUpdated();
 
 private:
-  const char		*network_tag = "Network";
+  static constexpr const char	*network_tag = "Network";
   enum NetworkStatus	status;
   int			reason;
   int			network_id;
@@ -138,7 +139,7 @@ private:
   static void ip_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void* event_data);
   static void discon_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void* event_data);
   static void con_event_handler(void *ctx, esp_event_base_t event_base, int32_t event_id, void* event_data);
-  static const char *WifiReason2String(int r);
+  static const char *WifiReason2String(int);
   static const char *IPEvent2String(int r);
   static const char *WifiEvent2String(int r);
 };
